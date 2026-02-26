@@ -227,6 +227,16 @@
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
+                <div class="toggle-row">
+                    <div class="toggle-info">
+                        <div class="toggle-title">⚫ Grayscale Images</div>
+                        <div class="toggle-desc">Convert the cover and all images to grayscale</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="grayscale-toggle" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
             </div>
         </div>
 
@@ -285,6 +295,8 @@
 
         let currentFile = null, convertedBlob = null, jpegQuality = 85, currentZip = null;
         let batchFiles = [], batchResults = [], isBatchMode = false;
+        let enableSplitRotate = false; // toggle for split & rotate
+        let enableGrayscale = true;    // toggle for grayscale conversion (default ON)
 
         async function validateEpub(zip, isAfter = false) {
             const issues = [];
@@ -331,19 +343,18 @@
                 }
             }
             
-            // Check for SVG covers
+            // Check for SVG image wrappers (including covers)
             let svgCovers = 0;
             for (const f of files) {
                 if (f.toLowerCase().match(/\.(xhtml|html|htm)$/)) {
                     const content = await zip.file(f).async('string');
-                    if (content.includes('<svg') && content.includes('xlink:href') && 
-                        (content.includes('calibre:cover') || content.includes('Cover</title>'))) {
+                    if (content.includes('<svg') && content.includes('xlink:href')) {
                         svgCovers++;
                     }
                 }
             }
             if (svgCovers > 0) {
-                issues.push({ type: isAfter ? 'error' : 'warning', msg: `${svgCovers} SVG cover(s) detected` + (isAfter ? '' : ' (will be fixed)') });
+                issues.push({ type: isAfter ? 'error' : 'warning', msg: `${svgCovers} SVG image wrapper(s) detected` + (isAfter ? '' : ' (will be fixed)') });
             }
             
             // Check for non-baseline images
@@ -409,6 +420,12 @@
         // Toggle handler
         const splitRotateToggle = document.getElementById('split-rotate-toggle');
         splitRotateToggle.onchange = () => { enableSplitRotate = splitRotateToggle.checked; };
+
+        const grayscaleToggle = document.getElementById('grayscale-toggle');
+        if (grayscaleToggle) {
+            enableGrayscale = grayscaleToggle.checked;
+            grayscaleToggle.onchange = () => { enableGrayscale = grayscaleToggle.checked; };
+        }
 
         function formatBytes(b) { if (!b) return '0 B'; const k = 1024, s = ['B','KB','MB','GB'], i = Math.floor(Math.log(b)/Math.log(k)); return (b/Math.pow(k,i)).toFixed(1)+' '+s[i]; }
         function log(m, t='') { const e = document.createElement('div'); e.className = 'log-entry '+t; e.textContent = m; logContainer.appendChild(e); logContainer.scrollTop = logContainer.scrollHeight; }
@@ -493,15 +510,46 @@
         }
 
         function fixSvgCover(c) {
-            if (!c.includes('<svg') || !c.includes('xlink:href')) return { c, fixed: false };
-            if (!c.includes('calibre:cover') && !c.includes('name="cover"') && !c.includes('<title>Cover</title>')) return { c, fixed: false };
-            const m = c.match(/xlink:href=["']([^"']+)["']/); if (!m) return { c, fixed: false };
+            if (!c.includes('<svg') || !c.includes('xlink:href')) return { c, fixed: false, count: 0 };
+            if (!c.includes('calibre:cover') && !c.includes('name="cover"') && !c.includes('<title>Cover</title>')) return { c, fixed: false, count: 0 };
+            const m = c.match(/xlink:href=["']([^"']+)["']/); if (!m) return { c, fixed: false, count: 0 };
             return { c: `<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="en" xml:lang="en">
 <head><meta content="text/html; charset=UTF-8" http-equiv="default-style"/><title>Cover</title></head>
 <body><section epub:type="cover"><img alt="Cover" src="${m[1]}"/></section></body>
-</html>`, fixed: true };
+</html>`, fixed: true, count: 1 };
+        }
+
+        // General fixer: unwrap any SVG-wrapped raster <image> into a plain <img>
+        function fixSvgWrappedImages(c) {
+            if (!c.includes('<svg') || !c.includes('xlink:href')) return { c, fixed: false, count: 0 };
+            let fixedCount = 0;
+            const svgImageRegex = /<svg\b[^>]*>[\s\S]*?<image\b[^>]*xlink:href=["']([^"']+)["'][^>]*>[\s\S]*?<\/svg>/gi;
+            
+            const newContent = c.replace(svgImageRegex, (match, href) => {
+                fixedCount++;
+                // Try to preserve width/height from <image> first, then <svg>
+                const imageTagMatch = match.match(/<image\b[^>]*>/i);
+                const svgTagMatch = match.match(/<svg\b[^>]*>/i);
+                
+                const getDim = (tag, attr) => {
+                    if (!tag) return null;
+                    const m = tag.match(new RegExp(attr + '=["\']([^"\']+)["\']', 'i'));
+                    return m ? m[1] : null;
+                };
+                
+                let width = getDim(imageTagMatch && imageTagMatch[0], 'width') || getDim(svgTagMatch && svgTagMatch[0], 'width');
+                let height = getDim(imageTagMatch && imageTagMatch[0], 'height') || getDim(svgTagMatch && svgTagMatch[0], 'height');
+                
+                let attrs = '';
+                if (width) attrs += ` width="${width}"`;
+                if (height) attrs += ` height="${height}"`;
+                
+                return `<img src="${href}" alt=""${attrs} />`;
+            });
+            
+            return { c: newContent, fixed: fixedCount > 0, count: fixedCount };
         }
 
         function ensureCoverMeta(o) {
@@ -555,7 +603,20 @@
         const MAX_WIDTH = 480;
         const MAX_HEIGHT = 800;
         const OVERLAP = 0.15; // 15% overlap
-        let enableSplitRotate = false; // toggle for split & rotate
+
+        function applyGrayscale(ctx, width, height) {
+            if (!enableGrayscale) return;
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                data[i] = data[i + 1] = data[i + 2] = l;
+            }
+            ctx.putImageData(imageData, 0, 0);
+        }
 
         // Process image: returns array of {data, suffix} objects
         async function processImage(data) {
@@ -613,6 +674,7 @@
                         rotCtx.translate(rotW, 0);
                         rotCtx.rotate(Math.PI / 2);
                         rotCtx.drawImage(scaledCanvas, 0, 0);
+                        applyGrayscale(rotCtx, rotW, rotH);
                         
                         // Step 3: If WIDTH > 480, split vertically
                         if (rotW <= MAX_WIDTH) {
@@ -664,7 +726,8 @@
                             ctx.fillStyle = '#FFF';
                             ctx.fillRect(0, 0, origW, origH);
                             ctx.drawImage(img, 0, 0);
-                            
+                            applyGrayscale(ctx, origW, origH);
+
                             const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', jpegQuality/100));
                             const arrBuf = await blob.arrayBuffer();
                             resolve([{ data: arrBuf, suffix: '' }]);
@@ -683,7 +746,8 @@
                             ctx.fillStyle = '#FFF';
                             ctx.fillRect(0, 0, newW, newH);
                             ctx.drawImage(img, 0, 0, newW, newH);
-                            
+                            applyGrayscale(ctx, newW, newH);
+
                             const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', jpegQuality/100));
                             const arrBuf = await blob.arrayBuffer();
                             resolve([{ data: arrBuf, suffix: '' }]);
@@ -763,7 +827,10 @@
             for (const [path, content] of Object.entries(xhtmlFiles)) {
                 let t = content;
                 const r = fixSvgCover(t);
-                if (r.fixed) { t = r.c; svgFix++; }
+                if (r.fixed) { t = r.c; svgFix += r.count || 1; }
+                
+                const r2 = fixSvgWrappedImages(t);
+                if (r2.fixed) { t = r2.c; svgFix += r2.count || 1; }
                 
                 for (const [o, n] of Object.entries(renamed)) {
                     t = t.split(o.split('/').pop()).join(n.split('/').pop());
@@ -879,6 +946,7 @@
                 log(`Starting batch conversion of ${batchFiles.length} files...`, 'info');
                 log('Quality: ' + jpegQuality + '%', 'info');
                 log('Light Novel Mode: ' + (enableSplitRotate ? 'ON' : 'OFF'), 'info');
+                log('Grayscale: ' + (enableGrayscale ? 'ON' : 'OFF'), 'info');
                 
                 let totalOriginalSize = 0;
                 let totalNewSize = 0;
@@ -973,6 +1041,7 @@
             log('Loaded: ' + currentFile.name, 'info'); 
             log('Quality: ' + jpegQuality + '%', 'info');
             log('Light Novel Mode: ' + (enableSplitRotate ? 'ON' : 'OFF'), 'info');
+            log('Grayscale: ' + (enableGrayscale ? 'ON' : 'OFF'), 'info');
             
             const renamed = {};
             zip.forEach(p => { const l = p.toLowerCase(); if (l.match(/\.(png|gif|webp|bmp|jpeg)$/)) renamed[p] = p.replace(/\.(png|gif|webp|bmp|jpeg)$/i, '.jpg'); });
@@ -1045,7 +1114,10 @@
             for (const [path, content] of Object.entries(xhtmlFiles)) {
                 let t = content;
                 const r = fixSvgCover(t); 
-                if (r.fixed) { t = r.c; svgFix++; log(`Fixed SVG: ${path.split('/').pop()}`, 'success'); }
+                if (r.fixed) { t = r.c; svgFix += r.count || 1; log(`Fixed SVG cover: ${path.split('/').pop()}`, 'success'); }
+                
+                const r2 = fixSvgWrappedImages(t);
+                if (r2.fixed) { t = r2.c; svgFix += r2.count || 1; log(`Unwrapped ${r2.count} SVG image(s): ${path.split('/').pop()}`, 'success'); }
                 
                 // Replace renamed images
                 for (const [o, n] of Object.entries(renamed)) {
@@ -1174,7 +1246,7 @@
             statConverted.textContent = conv; progress(100, 'Generating...');
             log(`Converted ${conv} images`, 'success');
             if (splitCount > 0) log(`Created ${splitCount} additional pages from splits`, 'info');
-            if (svgFix) log(`Fixed ${svgFix} SVG cover(s)`, 'success');
+            if (svgFix) log(`Fixed ${svgFix} SVG image wrapper(s)`, 'success');
             convertedBlob = await out.generateAsync({ type: 'blob', mimeType: 'application/epub+zip' });
             
             const originalSize = currentFile.size;
