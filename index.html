@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Baseline JPEG Converter</title>
+    <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg-primary: #0d0a12;
+            --bg-secondary: #15111d;
+            --bg-tertiary: #1e1829;
+            --accent: #a78bfa;
+            --accent-dim: #8b5cf6;
+            --accent-bright: #c4b5fd;
+            --accent-glow: rgba(167, 139, 250, 0.15);
+            --text-primary: #f5f3ff;
+            --text-secondary: #a8a3b8;
+            --text-tertiary: #6b6580;
+            --border: #2e2640;
+            --error: #f87171;
+            --warning: #fbbf24;
+            --info: #818cf8;
+            --font: 'Atkinson Hyperlegible Next', sans-serif;
+        }
+        body { font-family: var(--font); background: var(--bg-primary); color: var(--text-primary); min-height: 100vh; }
+        .grain { position: fixed; inset: 0; pointer-events: none; opacity: 0.03; z-index: 1000; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E"); }
+        .container { max-width: 720px; margin: 0 auto; padding: 60px 24px; position: relative; z-index: 1; }
+        header { text-align: center; margin-bottom: 48px; }
+        .logo { display: inline-flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+        .logo-icon { width: 48px; height: 48px; background: linear-gradient(135deg, var(--accent), var(--accent-dim)); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 8px 32px var(--accent-glow); }
+        h1 { font-size: 2rem; font-weight: 700; letter-spacing: -0.02em; }
+        .subtitle { color: var(--text-secondary); font-size: 1.05rem; margin-top: 8px; }
+        .drop-zone { border: 2px dashed var(--border); border-radius: 16px; padding: 64px 32px; text-align: center; cursor: pointer; transition: all 0.2s; background: var(--bg-secondary); position: relative; overflow: hidden; }
+        .drop-zone::before { content: ''; position: absolute; inset: 0; background: radial-gradient(circle at center, var(--accent-glow), transparent 70%); opacity: 0; transition: opacity 0.3s; }
+        .drop-zone:hover, .drop-zone.drag-over { border-color: var(--accent); background: var(--bg-tertiary); }
+        .drop-zone:hover::before, .drop-zone.drag-over::before { opacity: 1; }
+        .drop-zone-icon { font-size: 48px; margin-bottom: 16px; display: block; }
+        .drop-zone-text { font-size: 1.1rem; color: var(--text-secondary); margin-bottom: 8px; }
+        .drop-zone-hint { font-size: 0.85rem; color: var(--text-tertiary); }
+        #file-input { display: none; }
+        .file-info { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-top: 24px; display: none; }
+        .file-info.visible { display: block; animation: slideUp 0.3s; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .file-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+        .file-icon { width: 40px; height: 40px; background: var(--bg-tertiary); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+        .file-name { font-weight: 500; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .file-size { color: var(--text-tertiary); font-size: 0.85rem; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+        .stat-box { background: var(--bg-tertiary); border-radius: 8px; padding: 12px; text-align: center; }
+        .stat-value { font-size: 1.5rem; font-weight: 600; color: var(--accent); }
+        .stat-label { font-size: 0.75rem; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 4px; }
+        .validation-section { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 16px 20px; margin-top: 16px; display: none; }
+        .validation-section.visible { display: block; animation: slideUp 0.3s; }
+        .validation-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .validation-icon { font-size: 1.2rem; }
+        .validation-title { font-weight: 500; font-size: 0.95rem; }
+        .validation-section.success { border-color: #22c55e33; }
+        .validation-section.success .validation-title { color: #4ade80; }
+        .validation-section.warning { border-color: #f59e0b33; }
+        .validation-section.warning .validation-title { color: #fbbf24; }
+        .validation-section.error { border-color: #ef444433; }
+        .validation-section.error .validation-title { color: #f87171; }
+        .validation-issues { font-size: 0.85rem; color: var(--text-secondary); }
+        .validation-issue { display: flex; align-items: flex-start; gap: 8px; padding: 6px 0; }
+        .validation-issue.error { color: #f87171; }
+        .validation-issue.warning { color: #fbbf24; }
+        .validation-issue.success { color: #4ade80; }
+        .validation-issue.info { color: var(--info); }
+        .quality-section { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-top: 24px; display: none; }
+        .quality-section.visible { display: block; animation: slideUp 0.3s; }
+        .quality-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .quality-label { font-size: 0.95rem; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; }
+        .quality-input-wrapper { display: flex; align-items: center; gap: 6px; background: var(--bg-tertiary); padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); }
+        .quality-input { width: 48px; padding: 4px; border: none; background: transparent; color: var(--text-primary); font-family: var(--font); font-size: 1rem; font-weight: 600; text-align: right; }
+        .quality-input:focus { outline: none; }
+        .quality-input::-webkit-inner-spin-button, .quality-input::-webkit-outer-spin-button { -webkit-appearance: none; }
+        .quality-input[type=number] { -moz-appearance: textfield; }
+        .quality-percent { color: var(--text-tertiary); font-size: 0.9rem; }
+        .quality-slider { width: 100%; height: 6px; border-radius: 3px; background: var(--bg-tertiary); -webkit-appearance: none; cursor: pointer; margin: 8px 0; }
+        .quality-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-bright), var(--accent-dim)); cursor: pointer; box-shadow: 0 2px 8px var(--accent-glow); }
+        .quality-slider::-webkit-slider-thumb:hover { transform: scale(1.15); }
+        .quality-slider::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: linear-gradient(135deg, var(--accent-bright), var(--accent-dim)); border: none; }
+        .quality-hints { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-tertiary); }
+        .quality-presets { display: flex; gap: 8px; margin-top: 16px; }
+        .quality-preset { flex: 1; padding: 8px 12px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); font-family: var(--font); font-size: 0.8rem; cursor: pointer; transition: all 0.15s; text-align: center; }
+        .quality-preset:hover { border-color: var(--accent); color: var(--text-primary); }
+        .quality-preset.active { border-color: var(--accent); background: var(--accent-glow); color: var(--accent); }
+        .progress-section { margin-top: 24px; display: none; }
+        .progress-section.visible { display: block; }
+        .progress-bar-container { background: var(--bg-tertiary); border-radius: 8px; height: 8px; overflow: hidden; }
+        .progress-bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-dim)); border-radius: 8px; width: 0%; transition: width 0.3s; }
+        .progress-text { display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.85rem; color: var(--text-secondary); }
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 28px; border-radius: 10px; font-family: var(--font); font-size: 1rem; font-weight: 500; cursor: pointer; transition: all 0.2s; border: none; width: 100%; margin-top: 24px; }
+        .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent-dim)); color: #0d0a12; box-shadow: 0 4px 24px var(--accent-glow); }
+        .btn-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 32px var(--accent-glow); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-secondary { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); }
+        .btn-secondary:hover { background: var(--border); }
+        .toggle-section { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+        .toggle-row { display: flex; justify-content: space-between; align-items: center; }
+        .toggle-info { flex: 1; }
+        .toggle-title { font-size: 0.95rem; color: var(--text-primary); margin-bottom: 4px; }
+        .toggle-desc { font-size: 0.8rem; color: var(--text-tertiary); }
+        .toggle-switch { position: relative; width: 48px; height: 26px; flex-shrink: 0; margin-left: 16px; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; cursor: pointer; inset: 0; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 26px; transition: 0.2s; }
+        .toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background: var(--text-tertiary); border-radius: 50%; transition: 0.2s; }
+        .toggle-switch input:checked + .toggle-slider { background: var(--accent-dim); border-color: var(--accent); }
+        .toggle-switch input:checked + .toggle-slider:before { transform: translateX(22px); background: var(--text-primary); }
+        .log-section { margin-top: 24px; display: none; }
+        .log-section.visible { display: block; }
+        .log-title { font-size: 0.85rem; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+        .log-container { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 16px; max-height: 200px; overflow-y: auto; font-size: 0.8rem; line-height: 1.6; }
+        .log-entry { color: var(--text-secondary); }
+        .log-entry.success { color: var(--accent); }
+        .log-entry.error { color: var(--error); }
+        .log-entry.warning { color: var(--warning); }
+        .log-entry.info { color: var(--info); }
+        .complete-section { text-align: center; padding: 32px; display: none; }
+        .complete-section.visible { display: block; animation: slideUp 0.3s; }
+        .complete-icon { font-size: 64px; margin-bottom: 16px; }
+        .complete-title { font-size: 1.5rem; font-weight: 600; margin-bottom: 8px; }
+        .complete-subtitle { color: var(--text-secondary); margin-bottom: 24px; }
+        .buttons-row { display: flex; gap: 12px; margin-top: 24px; }
+        .buttons-row .btn { flex: 1; margin-top: 0; }
+        footer { text-align: center; margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--text-tertiary); font-size: 0.85rem; }
+        footer a { color: var(--accent); text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+        .tech-note { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-top: 32px; font-size: 0.85rem; color: var(--text-secondary); }
+        .tech-note strong { color: var(--text-primary); }
+        .features-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 12px; }
+        .feature-item { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text-secondary); }
+        .feature-check { color: var(--accent); }
+        .batch-info { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-top: 24px; display: none; }
+        .batch-info.visible { display: block; animation: slideUp 0.3s; }
+        .batch-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+        .batch-icon { font-size: 1.3rem; }
+        .batch-title { font-weight: 500; flex: 1; }
+        .batch-count { color: var(--accent); font-size: 0.9rem; }
+        .batch-list { display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto; }
+        .batch-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--bg-tertiary); border-radius: 8px; font-size: 0.9rem; }
+        .batch-item-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .batch-item-status { font-size: 0.8rem; color: var(--text-tertiary); }
+        .batch-item-status.done { color: var(--accent); }
+        .batch-item-status.error { color: var(--error); }
+        .batch-item-status.processing { color: var(--warning); }
+        .batch-item-icon { width: 20px; text-align: center; }
+        @media (max-width: 600px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .features-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="grain"></div>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">📚</div>
+                <h1>Baseline JPEG Converter</h1>
+            </div>
+            <p class="subtitle">Convert EPUB images to baseline JPEG with SVG cover fix</p>
+        </header>
+
+        <div class="drop-zone" id="drop-zone">
+            <span class="drop-zone-icon">📁</span>
+            <p class="drop-zone-text">Drop your EPUB files here</p>
+            <p class="drop-zone-hint">or click to browse (multiple files supported)</p>
+            <input type="file" id="file-input" accept=".epub" multiple>
+        </div>
+
+        <div class="batch-info" id="batch-info">
+            <div class="batch-header">
+                <span class="batch-icon">📚</span>
+                <span class="batch-title">Batch Processing</span>
+                <span class="batch-count" id="batch-count">0 files</span>
+            </div>
+            <div class="batch-list" id="batch-list"></div>
+        </div>
+
+        <div class="file-info" id="file-info">
+            <div class="file-header">
+                <div class="file-icon">📖</div>
+                <span class="file-name" id="file-name">-</span>
+                <span class="file-size" id="file-size">-</span>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-box"><div class="stat-value" id="stat-total">-</div><div class="stat-label">Images</div></div>
+                <div class="stat-box"><div class="stat-value" id="stat-converted">-</div><div class="stat-label">Converted</div></div>
+                <div class="stat-box"><div class="stat-value" id="stat-size">-</div><div class="stat-label">New Size</div></div>
+                <div class="stat-box"><div class="stat-value" id="stat-saved">-</div><div class="stat-label">Saved</div></div>
+            </div>
+        </div>
+
+        <div class="validation-section" id="validation-section">
+            <div class="validation-header">
+                <span class="validation-icon" id="validation-icon">🔍</span>
+                <span class="validation-title" id="validation-title">Validating EPUB...</span>
+            </div>
+            <div class="validation-issues" id="validation-issues"></div>
+        </div>
+
+        <div class="quality-section" id="quality-section">
+            <div class="quality-header">
+                <span class="quality-label"><span>🎨</span> JPEG Quality</span>
+                <div class="quality-input-wrapper">
+                    <input type="number" class="quality-input" id="quality-input" min="1" max="95" value="85">
+                    <span class="quality-percent">%</span>
+                </div>
+            </div>
+            <input type="range" class="quality-slider" id="quality-slider" min="1" max="95" value="85">
+            <div class="quality-hints"><span>Smaller file</span><span>Better quality</span></div>
+            <div class="quality-presets">
+                <button class="quality-preset" data-value="60">Low<br><small>60%</small></button>
+                <button class="quality-preset" data-value="75">Medium<br><small>75%</small></button>
+                <button class="quality-preset active" data-value="85">High<br><small>85%</small></button>
+                <button class="quality-preset" data-value="95">Max<br><small>95%</small></button>
+            </div>
+            
+            <div class="toggle-section">
+                <div class="toggle-row">
+                    <div class="toggle-info">
+                        <div class="toggle-title">📖 Light Novel Mode</div>
+                        <div class="toggle-desc">Rotate wide images 90° and split into pages for vertical reading (480×800 screen)</div>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="split-rotate-toggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="progress-section" id="progress-section">
+            <div class="progress-bar-container"><div class="progress-bar" id="progress-bar"></div></div>
+            <div class="progress-text"><span id="progress-status">Processing...</span><span id="progress-percent">0%</span></div>
+        </div>
+
+        <div class="log-section" id="log-section">
+            <div class="log-title">Conversion Log</div>
+            <div class="log-container" id="log-container"></div>
+        </div>
+
+        <button class="btn btn-primary" id="convert-btn" disabled><span>⚡</span> Convert to Baseline JPEG</button>
+
+        <div class="complete-section" id="complete-section">
+            <div class="complete-icon">✅</div>
+            <h2 class="complete-title">Conversion Complete!</h2>
+            <p class="complete-subtitle">All images converted to baseline JPEG format</p>
+            <div class="buttons-row">
+                <button class="btn btn-primary" id="download-btn"><span>⬇️</span> Download EPUB</button>
+                <button class="btn btn-secondary" id="reset-btn"><span>🔄</span> Convert Another</button>
+            </div>
+        </div>
+
+        <div class="tech-note">
+            <strong>What this does:</strong>
+            <div class="features-grid">
+                <div class="feature-item"><span class="feature-check">✓</span> Converts PNG/GIF/WebP to baseline JPEG</div>
+                <div class="feature-item"><span class="feature-check">✓</span> Fixes SVG covers for e-readers</div>
+                <div class="feature-item"><span class="feature-check">✓</span> Scales large images to fit screen</div>
+                <div class="feature-item"><span class="feature-check">✓</span> Light Novel Mode: rotates & splits wide images</div>
+                <div class="feature-item"><span class="feature-check">✓</span> Batch processing with ZIP download</div>
+                <div class="feature-item"><span class="feature-check">✓</span> CrossPoint / e-reader compatible</div>
+            </div>
+        </div>
+
+        <footer>Made by <a href="#">Megabit</a> • v2.2.0 • Runs entirely in your browser</footer>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script>
+        const $ = id => document.getElementById(id);
+        const dropZone = $('drop-zone'), fileInput = $('file-input'), fileInfo = $('file-info');
+        const fileName = $('file-name'), fileSize = $('file-size'), qualitySection = $('quality-section');
+        const qualitySlider = $('quality-slider'), qualityInput = $('quality-input');
+        const qualityPresets = document.querySelectorAll('.quality-preset');
+        const convertBtn = $('convert-btn'), progressSection = $('progress-section');
+        const progressBar = $('progress-bar'), progressStatus = $('progress-status'), progressPercent = $('progress-percent');
+        const logSection = $('log-section'), logContainer = $('log-container');
+        const completeSection = $('complete-section'), downloadBtn = $('download-btn'), resetBtn = $('reset-btn');
+        const statTotal = $('stat-total'), statConverted = $('stat-converted'), statSize = $('stat-size'), statSaved = $('stat-saved');
+        const validationSection = $('validation-section'), validationIcon = $('validation-icon');
+        const validationTitle = $('validation-title'), validationIssues = $('validation-issues');
+        const batchInfo = $('batch-info'), batchList = $('batch-list'), batchCount = $('batch-count');
+
+        let currentFile = null, convertedBlob = null, jpegQuality = 85, currentZip = null;
+        let batchFiles = [], batchResults = [], isBatchMode = false;
+
+        async function validateEpub(zip, isAfter = false) {
+            const issues = [];
+            const files = Object.keys(zip.files);
+            
+            // Check mimetype
+            if (!files.includes('mimetype')) {
+                issues.push({ type: 'error', msg: 'Missing mimetype file' });
+            } else {
+                const mt = await zip.file('mimetype').async('string');
+                if (!mt.includes('application/epub+zip')) {
+                    issues.push({ type: 'error', msg: 'Invalid mimetype content' });
+                }
+            }
+            
+            // Check container.xml
+            if (!files.some(f => f.toLowerCase() === 'meta-inf/container.xml')) {
+                issues.push({ type: 'error', msg: 'Missing META-INF/container.xml' });
+            }
+            
+            // Find and check OPF
+            const opfFile = files.find(f => f.toLowerCase().endsWith('.opf'));
+            if (!opfFile) {
+                issues.push({ type: 'error', msg: 'Missing OPF file' });
+            } else {
+                const opf = await zip.file(opfFile).async('string');
+                
+                // Check cover meta - support both attribute orders
+                const coverMetaMatch = opf.match(/<meta\s+name=["']cover["']\s+content=["']([^"']+)["']/) ||
+                                       opf.match(/<meta\s+content=["']([^"']+)["']\s+name=["']cover["']/);
+                if (!coverMetaMatch) {
+                    issues.push({ type: isAfter ? 'error' : 'warning', msg: 'Missing cover meta tag' + (isAfter ? '' : ' (will be added)') });
+                } else {
+                    const coverValue = coverMetaMatch[1];
+                    // Check if value is a path (contains /) instead of just ID
+                    if (coverValue.includes('/')) {
+                        issues.push({ type: isAfter ? 'error' : 'warning', msg: 'Cover meta contains path instead of ID' + (isAfter ? '' : ' (will be fixed)') });
+                    }
+                }
+                
+                // Check for cover-image property
+                if (!opf.includes('cover-image') && !opf.match(/id="[^"]*cover[^"]*"[^>]+media-type="image/i)) {
+                    issues.push({ type: 'warning', msg: 'No cover image detected in manifest' });
+                }
+            }
+            
+            // Check for SVG covers
+            let svgCovers = 0;
+            for (const f of files) {
+                if (f.toLowerCase().match(/\.(xhtml|html|htm)$/)) {
+                    const content = await zip.file(f).async('string');
+                    if (content.includes('<svg') && content.includes('xlink:href') && 
+                        (content.includes('calibre:cover') || content.includes('Cover</title>'))) {
+                        svgCovers++;
+                    }
+                }
+            }
+            if (svgCovers > 0) {
+                issues.push({ type: isAfter ? 'error' : 'warning', msg: `${svgCovers} SVG cover(s) detected` + (isAfter ? '' : ' (will be fixed)') });
+            }
+            
+            // Check for non-baseline images
+            let nonJpeg = 0, progressive = 0;
+            for (const f of files) {
+                const low = f.toLowerCase();
+                if (low.match(/\.(png|gif|webp|bmp|jpeg)$/)) nonJpeg++;
+            }
+            if (nonJpeg > 0 && !isAfter) {
+                issues.push({ type: 'info', msg: `${nonJpeg} non-JPEG image(s) will be converted` });
+            }
+            
+            // Count images
+            const imgCount = files.filter(f => f.toLowerCase().match(/\.(jpg|jpeg|png|gif|webp|bmp)$/)).length;
+            
+            return { issues, imgCount, svgCovers, nonJpeg };
+        }
+
+        function showValidation(result, isAfter = false) {
+            validationSection.classList.remove('success', 'warning', 'error');
+            validationIssues.innerHTML = '';
+            
+            const errors = result.issues.filter(i => i.type === 'error').length;
+            const warnings = result.issues.filter(i => i.type === 'warning').length;
+            
+            if (errors > 0) {
+                validationSection.classList.add('error');
+                validationIcon.textContent = '❌';
+                validationTitle.textContent = isAfter ? `${errors} issue(s) remaining` : `${errors} error(s) found`;
+            } else if (warnings > 0) {
+                validationSection.classList.add('warning');
+                validationIcon.textContent = '⚠️';
+                validationTitle.textContent = isAfter ? 'EPUB valid with warnings' : `${warnings} issue(s) will be fixed`;
+            } else {
+                validationSection.classList.add('success');
+                validationIcon.textContent = '✅';
+                validationTitle.textContent = isAfter ? 'EPUB valid - ready for e-readers' : 'EPUB structure valid';
+            }
+            
+            result.issues.forEach(issue => {
+                const div = document.createElement('div');
+                div.className = 'validation-issue ' + issue.type;
+                div.innerHTML = `<span>${issue.type === 'error' ? '✗' : issue.type === 'warning' ? '⚠' : issue.type === 'success' ? '✓' : 'ℹ'}</span> ${issue.msg}`;
+                validationIssues.appendChild(div);
+            });
+            
+            if (result.issues.length === 0) {
+                const div = document.createElement('div');
+                div.className = 'validation-issue success';
+                div.innerHTML = '<span>✓</span> All checks passed';
+                validationIssues.appendChild(div);
+            }
+            
+            validationSection.classList.add('visible');
+        }
+
+        qualitySlider.oninput = e => { jpegQuality = +e.target.value; qualityInput.value = jpegQuality; updatePresets(); };
+        qualityInput.oninput = e => { let v = Math.max(1, Math.min(95, +e.target.value || 85)); jpegQuality = v; qualitySlider.value = v; updatePresets(); };
+        qualityInput.onblur = () => qualityInput.value = jpegQuality;
+        qualityPresets.forEach(b => b.onclick = () => { jpegQuality = +b.dataset.value; qualitySlider.value = qualityInput.value = jpegQuality; updatePresets(); });
+        function updatePresets() { qualityPresets.forEach(b => b.classList.toggle('active', +b.dataset.value === jpegQuality)); }
+        
+        // Toggle handler
+        const splitRotateToggle = document.getElementById('split-rotate-toggle');
+        splitRotateToggle.onchange = () => { enableSplitRotate = splitRotateToggle.checked; };
+
+        function formatBytes(b) { if (!b) return '0 B'; const k = 1024, s = ['B','KB','MB','GB'], i = Math.floor(Math.log(b)/Math.log(k)); return (b/Math.pow(k,i)).toFixed(1)+' '+s[i]; }
+        function log(m, t='') { const e = document.createElement('div'); e.className = 'log-entry '+t; e.textContent = m; logContainer.appendChild(e); logContainer.scrollTop = logContainer.scrollHeight; }
+        function clearLog() { logContainer.innerHTML = ''; }
+        function progress(p, s) { progressBar.style.width = p+'%'; progressPercent.textContent = Math.round(p)+'%'; if (s) progressStatus.textContent = s; }
+
+        dropZone.onclick = () => fileInput.click();
+        dropZone.ondragover = e => { e.preventDefault(); dropZone.classList.add('drag-over'); };
+        dropZone.ondragleave = () => dropZone.classList.remove('drag-over');
+        dropZone.ondrop = e => { 
+            e.preventDefault(); 
+            dropZone.classList.remove('drag-over'); 
+            const files = [...e.dataTransfer.files].filter(f => f.name.endsWith('.epub'));
+            if (files.length > 0) handleFiles(files);
+        };
+        fileInput.onchange = e => { 
+            const files = [...e.target.files].filter(f => f.name.endsWith('.epub'));
+            if (files.length > 0) handleFiles(files);
+        };
+
+        function updateBatchList() {
+            batchList.innerHTML = '';
+            batchFiles.forEach((f, i) => {
+                const status = batchResults[i];
+                const item = document.createElement('div');
+                item.className = 'batch-item';
+                let icon = '📄', statusText = 'Pending', statusClass = '';
+                if (status === 'processing') { icon = '⏳'; statusText = 'Processing...'; statusClass = 'processing'; }
+                else if (status === 'done') { icon = '✅'; statusText = 'Done'; statusClass = 'done'; }
+                else if (status === 'error') { icon = '❌'; statusText = 'Error'; statusClass = 'error'; }
+                item.innerHTML = `<span class="batch-item-icon">${icon}</span><span class="batch-item-name">${f.name}</span><span class="batch-item-status ${statusClass}">${statusText}</span>`;
+                batchList.appendChild(item);
+            });
+            batchCount.textContent = `${batchFiles.length} file${batchFiles.length > 1 ? 's' : ''}`;
+        }
+
+        async function handleFiles(files) {
+            if (files.length === 1) {
+                // Single file mode
+                isBatchMode = false;
+                batchInfo.classList.remove('visible');
+                handleFile(files[0]);
+            } else {
+                // Batch mode
+                isBatchMode = true;
+                batchFiles = files;
+                batchResults = files.map(() => 'pending');
+                batchInfo.classList.add('visible');
+                fileInfo.classList.remove('visible');
+                validationSection.classList.remove('visible');
+                updateBatchList();
+                qualitySection.classList.add('visible');
+                convertBtn.disabled = false;
+            }
+        }
+
+        async function handleFile(f) {
+            currentFile = f; fileName.textContent = f.name; fileSize.textContent = formatBytes(f.size);
+            fileInfo.classList.add('visible'); 
+            validationSection.classList.remove('visible', 'success', 'warning', 'error');
+            validationIcon.textContent = '🔍'; validationTitle.textContent = 'Validating EPUB...';
+            validationIssues.innerHTML = ''; validationSection.classList.add('visible');
+            
+            completeSection.classList.remove('visible'); 
+            statTotal.textContent = statConverted.textContent = statSize.textContent = statSaved.textContent = '-'; 
+            clearLog();
+            
+            try {
+                currentZip = await JSZip.loadAsync(f);
+                const result = await validateEpub(currentZip, false);
+                statTotal.textContent = result.imgCount;
+                showValidation(result, false);
+                qualitySection.classList.add('visible'); 
+                convertBtn.disabled = false;
+            } catch (e) {
+                validationSection.classList.add('error');
+                validationIcon.textContent = '❌';
+                validationTitle.textContent = 'Invalid EPUB file';
+                validationIssues.innerHTML = '<div class="validation-issue error"><span>✗</span> ' + e.message + '</div>';
+                convertBtn.disabled = true;
+            }
+        }
+
+        function fixSvgCover(c) {
+            if (!c.includes('<svg') || !c.includes('xlink:href')) return { c, fixed: false };
+            if (!c.includes('calibre:cover') && !c.includes('name="cover"') && !c.includes('<title>Cover</title>')) return { c, fixed: false };
+            const m = c.match(/xlink:href=["']([^"']+)["']/); if (!m) return { c, fixed: false };
+            return { c: `<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="en" xml:lang="en">
+<head><meta content="text/html; charset=UTF-8" http-equiv="default-style"/><title>Cover</title></head>
+<body><section epub:type="cover"><img alt="Cover" src="${m[1]}"/></section></body>
+</html>`, fixed: true };
+        }
+
+        function ensureCoverMeta(o) {
+            // Find cover image ID from manifest
+            let coverId = null, m;
+            
+            // Try 1: properties="cover-image"
+            if (m = o.match(/<item[^>]+id="([^"]+)"[^>]+properties="[^"]*cover-image[^"]*"/)) coverId = m[1];
+            if (!coverId && (m = o.match(/<item[^>]+properties="[^"]*cover-image[^"]*"[^>]+id="([^"]+)"/))) coverId = m[1];
+            
+            // Try 2: href contains "cover" and is an image
+            if (!coverId && (m = o.match(/<item[^>]+id="([^"]+)"[^>]+href="[^"]*cover[^"]*"[^>]*media-type="image\//i))) coverId = m[1];
+            if (!coverId && (m = o.match(/<item[^>]+href="[^"]*cover[^"]*"[^>]+id="([^"]+)"[^>]*media-type="image\//i))) coverId = m[1];
+            
+            // Try 3: id contains "cover" and is an image
+            if (!coverId && (m = o.match(/<item[^>]+id="([^"]*cover[^"]*)"[^>]+media-type="image\//i))) coverId = m[1];
+            if (!coverId && (m = o.match(/<item[^>]+media-type="image\/[^"]*"[^>]+id="([^"]*cover[^"]*)"[^>]*/i))) coverId = m[1];
+            
+            if (!coverId) return { o, fixed: false };
+            
+            // Check if cover meta exists - support both attribute orders:
+            // <meta name="cover" content="..."> OR <meta content="..." name="cover">
+            const metaMatch = o.match(/<meta\s+name=["']cover["']\s+content=["']([^"']+)["']/) || 
+                              o.match(/<meta\s+content=["']([^"']+)["']\s+name=["']cover["']/);
+            if (metaMatch) {
+                const currentValue = metaMatch[1];
+                // If value contains path separators, it's wrong - should be ID only
+                if (currentValue.includes('/')) {
+                    // Replace with correct ID - handle both orders
+                    o = o.replace(/<meta\s+name=["']cover["']\s+content=["'][^"']+["']\s*\/?>/g, `<meta name="cover" content="${coverId}" />`);
+                    o = o.replace(/<meta\s+content=["'][^"']+["']\s+name=["']cover["']\s*\/?>/g, `<meta name="cover" content="${coverId}" />`);
+                    return { o, fixed: true };
+                }
+                // If value doesn't match the cover ID we found, fix it
+                if (currentValue !== coverId) {
+                    o = o.replace(/<meta\s+name=["']cover["']\s+content=["'][^"']+["']\s*\/?>/g, `<meta name="cover" content="${coverId}" />`);
+                    o = o.replace(/<meta\s+content=["'][^"']+["']\s+name=["']cover["']\s*\/?>/g, `<meta name="cover" content="${coverId}" />`);
+                    return { o, fixed: true };
+                }
+                return { o, fixed: false }; // Already has valid cover meta
+            }
+            
+            // Add missing cover meta (only replace first occurrence)
+            const idx = o.indexOf('</metadata>');
+            if (idx !== -1) {
+                return { o: o.substring(0, idx) + `    <meta name="cover" content="${coverId}"/>\n  </metadata>` + o.substring(idx + 11), fixed: true };
+            }
+            return { o, fixed: false };
+        }
+
+        const MAX_WIDTH = 480;
+        const MAX_HEIGHT = 800;
+        const OVERLAP = 0.15; // 15% overlap
+        let enableSplitRotate = false; // toggle for split & rotate
+
+        // Process image: returns array of {data, suffix} objects
+        async function processImage(data) {
+            return new Promise((resolve, reject) => {
+                const url = URL.createObjectURL(new Blob([data]));
+                const img = new Image();
+                img.onload = async () => {
+                    URL.revokeObjectURL(url);
+                    const origW = img.width, origH = img.height;
+                    
+                    // Check if horizontal (wider than tall) AND doesn't fit in 480x800
+                    const isHorizontal = origW > origH;
+                    const exceedsScreen = origW > MAX_WIDTH || origH > MAX_HEIGHT;  // > 480 or > 800
+                    const needsRotation = isHorizontal && exceedsScreen;
+                    
+                    if (needsRotation && enableSplitRotate) {
+                        // HORIZONTAL IMAGE that exceeds 480x800 (e.g., 2400 x 1600)
+                        //
+                        // Step 1: Scale WIDTH to 800px (keep aspect ratio)
+                        //   scale = 800 / 2400 = 0.333
+                        //   Result: 800 x 533
+                        //
+                        // Step 2: Rotate 90° clockwise  
+                        //   Result: 533 x 800
+                        //
+                        // Step 3: If WIDTH (533) > 480, split vertically with 15% overlap
+                        //   Each part: 480 x 800
+                        
+                        // Step 1: Scale width to 800
+                        const scale = MAX_HEIGHT / origW;  // 800 / origW
+                        const scaledW = MAX_HEIGHT;  // 800
+                        const scaledH = Math.round(origH * scale);
+                        
+                        const scaledCanvas = document.createElement('canvas');
+                        scaledCanvas.width = scaledW;
+                        scaledCanvas.height = scaledH;
+                        const scaledCtx = scaledCanvas.getContext('2d');
+                        scaledCtx.imageSmoothingEnabled = true;
+                        scaledCtx.imageSmoothingQuality = 'high';
+                        scaledCtx.fillStyle = '#FFF';
+                        scaledCtx.fillRect(0, 0, scaledW, scaledH);
+                        scaledCtx.drawImage(img, 0, 0, origW, origH, 0, 0, scaledW, scaledH);
+                        
+                        // Step 2: Rotate 90° CW
+                        // After rotation: new width = scaledH, new height = scaledW (800)
+                        const rotW = scaledH;
+                        const rotH = scaledW;  // 800
+                        
+                        const rotCanvas = document.createElement('canvas');
+                        rotCanvas.width = rotW;
+                        rotCanvas.height = rotH;
+                        const rotCtx = rotCanvas.getContext('2d');
+                        rotCtx.fillStyle = '#FFF';
+                        rotCtx.fillRect(0, 0, rotW, rotH);
+                        rotCtx.translate(rotW, 0);
+                        rotCtx.rotate(Math.PI / 2);
+                        rotCtx.drawImage(scaledCanvas, 0, 0);
+                        
+                        // Step 3: If WIDTH > 480, split vertically
+                        if (rotW <= MAX_WIDTH) {
+                            // No split needed - width fits
+                            const blob = await new Promise(res => rotCanvas.toBlob(res, 'image/jpeg', jpegQuality/100));
+                            const arrBuf = await blob.arrayBuffer();
+                            resolve([{ data: arrBuf, suffix: '' }]);
+                        } else {
+                            // Split by WIDTH (vertical cuts) - from RIGHT to LEFT
+                            // After 90° CW rotation: right side becomes top, left becomes bottom
+                            // So we cut from right to left to get top-to-bottom order
+                            const parts = [];
+                            const maxW = MAX_WIDTH;  // 480
+                            const overlapPx = Math.round(maxW * OVERLAP);  // ~72
+                            const step = maxW - overlapPx;  // ~408
+                            const numParts = Math.ceil((rotW - overlapPx) / step);
+                            
+                            for (let i = 0; i < numParts; i++) {
+                                // Start from right side (rotW) and go left
+                                let x = rotW - maxW - (i * step);
+                                if (i === numParts - 1) {
+                                    x = 0;  // Last part starts at left edge
+                                }
+                                x = Math.max(0, x);
+                                const partW = Math.min(maxW, rotW - x);
+                                
+                                const partCanvas = document.createElement('canvas');
+                                partCanvas.width = partW;
+                                partCanvas.height = rotH;  // 800
+                                const partCtx = partCanvas.getContext('2d');
+                                partCtx.drawImage(rotCanvas, x, 0, partW, rotH, 0, 0, partW, rotH);
+                                
+                                const blob = await new Promise(res => partCanvas.toBlob(res, 'image/jpeg', jpegQuality/100));
+                                const arrBuf = await blob.arrayBuffer();
+                                parts.push({ data: arrBuf, suffix: `_part${i + 1}` });
+                            }
+                            resolve(parts);
+                        }
+                    } else {
+                        // NOT rotating - check if we need to scale at all
+                        const fitsInScreen = origW <= MAX_WIDTH && origH <= MAX_HEIGHT;
+                        
+                        if (fitsInScreen) {
+                            // Image already fits in 480x800 - don't touch it, just convert to JPEG
+                            const c = document.createElement('canvas');
+                            c.width = origW;
+                            c.height = origH;
+                            const ctx = c.getContext('2d');
+                            ctx.fillStyle = '#FFF';
+                            ctx.fillRect(0, 0, origW, origH);
+                            ctx.drawImage(img, 0, 0);
+                            
+                            const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', jpegQuality/100));
+                            const arrBuf = await blob.arrayBuffer();
+                            resolve([{ data: arrBuf, suffix: '' }]);
+                        } else {
+                            // Image too big - scale to fit 480x800 (keep aspect ratio)
+                            const scale = Math.min(MAX_WIDTH / origW, MAX_HEIGHT / origH);
+                            const newW = Math.round(origW * scale);
+                            const newH = Math.round(origH * scale);
+                            
+                            const c = document.createElement('canvas');
+                            c.width = newW;
+                            c.height = newH;
+                            const ctx = c.getContext('2d');
+                            ctx.imageSmoothingEnabled = true;
+                            ctx.imageSmoothingQuality = 'high';
+                            ctx.fillStyle = '#FFF';
+                            ctx.fillRect(0, 0, newW, newH);
+                            ctx.drawImage(img, 0, 0, newW, newH);
+                            
+                            const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', jpegQuality/100));
+                            const arrBuf = await blob.arrayBuffer();
+                            resolve([{ data: arrBuf, suffix: '' }]);
+                        }
+                    }
+                };
+                img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Load failed')); };
+                img.src = url;
+            });
+        }
+
+        // Convert single file and return blob
+        async function convertSingleFile(file, progressCallback) {
+            const zip = await JSZip.loadAsync(file);
+            const renamed = {};
+            zip.forEach(p => { const l = p.toLowerCase(); if (l.match(/\.(png|gif|webp|bmp|jpeg)$/)) renamed[p] = p.replace(/\.(png|gif|webp|bmp|jpeg)$/i, '.jpg'); });
+            const imgs = []; zip.forEach(p => { if (p.toLowerCase().match(/\.(png|gif|webp|bmp|jpg|jpeg)$/)) imgs.push(p); });
+
+            let conv = 0, svgFix = 0, splitCount = 0;
+            const out = new JSZip(), entries = Object.entries(zip.files);
+            const splitImages = {};
+            const xhtmlFiles = {};
+            let opfPath = null, opfContent = null;
+            
+            // CRITICAL: Write mimetype FIRST per EPUB OCF spec
+            // It must be uncompressed and the first entry in the archive
+            if (zip.files['mimetype']) {
+                const mimetypeData = await zip.files['mimetype'].async('arraybuffer');
+                out.file('mimetype', mimetypeData, { compression: 'STORE', createFolders: false });
+            }
+            
+            // First pass: process images
+            for (let i = 0; i < entries.length; i++) {
+                const [path, fileObj] = entries[i];
+                if (fileObj.dir || path === 'mimetype') continue;
+                const low = path.toLowerCase();
+                
+                if (low.match(/\.(png|gif|webp|bmp|jpg|jpeg)$/)) {
+                    const data = await fileObj.async('arraybuffer');
+                    const parts = await processImage(data);
+                    
+                    const baseName = path.replace(/\.[^.]+$/, '');
+                    const newExt = '.jpg';
+                    
+                    if (parts.length === 1 && parts[0].suffix === '') {
+                        const newPath = renamed[path] || path.replace(/\.[^.]+$/, newExt);
+                        out.file(newPath, parts[0].data, { compression: 'DEFLATE', createFolders: false });
+                        conv++;
+                    } else {
+                        const origName = path.split('/').pop();
+                        splitImages[origName] = [];
+                        
+                        for (const part of parts) {
+                            const partName = baseName.split('/').pop() + part.suffix + newExt;
+                            const partPath = (path.includes('/') ? path.substring(0, path.lastIndexOf('/') + 1) : '') + partName;
+                            out.file(partPath, part.data, { compression: 'DEFLATE', createFolders: false });
+                            splitImages[origName].push({ 
+                                path: partPath, 
+                                imgName: partName,
+                                id: baseName.split('/').pop() + part.suffix
+                            });
+                            splitCount++;
+                            conv++;
+                        }
+                    }
+                } else if (low.match(/\.(xhtml|html|htm)$/)) {
+                    xhtmlFiles[path] = await fileObj.async('string');
+                } else if (low.endsWith('.opf')) {
+                    opfPath = path;
+                    opfContent = await fileObj.async('string');
+                }
+                
+                if (progressCallback) progressCallback((i / entries.length) * 60);
+            }
+            
+            // Second pass: update XHTML
+            for (const [path, content] of Object.entries(xhtmlFiles)) {
+                let t = content;
+                const r = fixSvgCover(t);
+                if (r.fixed) { t = r.c; svgFix++; }
+                
+                for (const [o, n] of Object.entries(renamed)) {
+                    t = t.split(o.split('/').pop()).join(n.split('/').pop());
+                }
+                
+                for (const [origName, parts] of Object.entries(splitImages)) {
+                    const newName = origName.replace(/\.(png|gif|webp|bmp|jpeg)$/i, '.jpg');
+                    const blockRegex = new RegExp(
+                        `(<(?:p|div)[^>]*>\\s*<span>\\s*<img[^>]*src=["'][^"']*(?:${origName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}|${newName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})[^>]*/>\\s*</span>\\s*</(?:p|div)>)`,
+                        'gi'
+                    );
+                    t = t.replace(blockRegex, (match) => {
+                        let result = '';
+                        for (let i = 0; i < parts.length; i++) {
+                            if (i > 0) result += '\n';
+                            const newBlock = match.replace(origName, parts[i].imgName).replace(newName, parts[i].imgName);
+                            result += newBlock;
+                        }
+                        return result;
+                    });
+                    
+                    const simpleImgRegex = new RegExp(
+                        `(<img[^>]*src=["'])([^"']*(?:${origName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}|${newName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}))([^>]*/>)`,
+                        'gi'
+                    );
+                    t = t.replace(simpleImgRegex, (match, before, src, after) => {
+                        let result = '';
+                        for (let i = 0; i < parts.length; i++) {
+                            if (i > 0) result += '\n';
+                            const partSrc = src.replace(origName, parts[i].imgName).replace(newName, parts[i].imgName);
+                            result += `${before}${partSrc}${after}`;
+                        }
+                        return result;
+                    });
+                }
+                out.file(path, t, { compression: 'DEFLATE', createFolders: false });
+            }
+            
+            // Third pass: update OPF
+            if (opfContent) {
+                let t = opfContent;
+                for (const [o, n] of Object.entries(renamed)) {
+                    t = t.split(o.split('/').pop()).join(n.split('/').pop());
+                }
+                t = t.replace(/href="([^"]+\.jpg)"([^>]*)media-type="image\/(png|gif|webp|bmp)"/g, 'href="$1"$2media-type="image/jpeg"');
+                t = t.replace(/media-type="image\/(png|gif|webp|bmp)"([^>]*)href="([^"]+\.jpg)"/g, 'media-type="image/jpeg"$2href="$3"');
+                if (svgFix) t = t.replace(/\s+svg(?=["'\s>])/g, '');
+                
+                // Calculate OPF directory for relative paths
+                const opfDir = opfPath.includes('/') ? opfPath.substring(0, opfPath.lastIndexOf('/')) : '';
+                
+                for (const [origName, parts] of Object.entries(splitImages)) {
+                    const origBaseName = origName.replace(/\.[^.]+$/, '');
+                    const origImgRegex = new RegExp(`(href=["'][^"']*/?)(${origBaseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\.(?:jpg|jpeg|png|gif|webp|bmp)(["'])`, 'gi');
+                    t = t.replace(origImgRegex, `$1${origBaseName}_part1.jpg$3`);
+                    
+                    // Add manifest entries for additional parts with correct relative paths
+                    let manifestAdditions = '';
+                    for (let j = 1; j < parts.length; j++) {
+                        const p = parts[j];
+                        // Calculate href relative to OPF directory
+                        let href;
+                        if (opfDir && p.path.startsWith(opfDir + '/')) {
+                            href = p.path.substring(opfDir.length + 1);
+                        } else if (opfDir) {
+                            // Different directory - use relative path
+                            href = p.path;
+                        } else {
+                            href = p.path;
+                        }
+                        manifestAdditions += `<item id="img-${p.id}" href="${href}" media-type="image/jpeg"/>\n`;
+                    }
+                    // Only replace first occurrence of </manifest>
+                    if (manifestAdditions && t.includes('</manifest>')) {
+                        t = t.replace('</manifest>', manifestAdditions + '</manifest>');
+                    }
+                }
+                
+                const cm = ensureCoverMeta(t);
+                if (cm.fixed) t = cm.o;
+                out.file(opfPath, t, { compression: 'DEFLATE', createFolders: false });
+            }
+            
+            // Copy remaining files (skip mimetype - already written first)
+            for (const [path, fileObj] of entries) {
+                if (fileObj.dir || path === 'mimetype') continue;
+                const low = path.toLowerCase();
+                if (low.match(/\.(png|gif|webp|bmp|jpg|jpeg)$/) || low.match(/\.(xhtml|html|htm)$/) || low.endsWith('.opf')) continue;
+                
+                let data = await fileObj.async('arraybuffer');
+                if (low.endsWith('.css') || low.endsWith('.ncx')) {
+                    let t = new TextDecoder().decode(data);
+                    for (const [o, n] of Object.entries(renamed)) {
+                        t = t.split(o.split('/').pop()).join(n.split('/').pop());
+                    }
+                    data = new TextEncoder().encode(t);
+                }
+                out.file(path, data, { compression: 'DEFLATE', createFolders: false });
+            }
+            
+            return await out.generateAsync({ type: 'blob', mimeType: 'application/epub+zip' });
+        }
+
+        convertBtn.onclick = async () => {
+            if (isBatchMode) {
+                // Batch processing
+                convertBtn.disabled = true;
+                progressSection.classList.add('visible');
+                logSection.classList.add('visible');
+                clearLog();
+                
+                const results = [];
+                log(`Starting batch conversion of ${batchFiles.length} files...`, 'info');
+                log('Quality: ' + jpegQuality + '%', 'info');
+                log('Light Novel Mode: ' + (enableSplitRotate ? 'ON' : 'OFF'), 'info');
+                
+                let totalOriginalSize = 0;
+                let totalNewSize = 0;
+                
+                for (let i = 0; i < batchFiles.length; i++) {
+                    const file = batchFiles[i];
+                    batchResults[i] = 'processing';
+                    updateBatchList();
+                    
+                    try {
+                        log(`[${i+1}/${batchFiles.length}] Converting: ${file.name}`, 'info');
+                        progress((i / batchFiles.length) * 100, `Converting ${file.name}...`);
+                        
+                        const blob = await convertSingleFile(file, (p) => {
+                            progress((i / batchFiles.length) * 100 + (p / batchFiles.length), `Converting ${file.name}...`);
+                        });
+                        
+                        const savedBytes = file.size - blob.size;
+                        const savedPercent = ((savedBytes / file.size) * 100).toFixed(1);
+                        
+                        totalOriginalSize += file.size;
+                        totalNewSize += blob.size;
+                        
+                        results.push({ name: file.name, blob, success: true, originalSize: file.size });
+                        batchResults[i] = 'done';
+                        
+                        if (savedBytes > 0) {
+                            log(`✓ ${file.name}: ${formatBytes(file.size)} → ${formatBytes(blob.size)} (saved ${savedPercent}%)`, 'success');
+                        } else {
+                            log(`✓ ${file.name}: ${formatBytes(file.size)} → ${formatBytes(blob.size)} (+${formatBytes(-savedBytes)})`, 'warning');
+                        }
+                    } catch (e) {
+                        results.push({ name: file.name, error: e.message, success: false });
+                        batchResults[i] = 'error';
+                        log(`✗ ${file.name}: ${e.message}`, 'error');
+                    }
+                    updateBatchList();
+                }
+                
+                progress(100, 'Creating ZIP...');
+                
+                // Create ZIP with all converted files
+                const batchZip = new JSZip();
+                for (const result of results) {
+                    if (result.success) {
+                        batchZip.file(result.name.replace('.epub', '_baseline.epub'), result.blob);
+                    }
+                }
+                
+                convertedBlob = await batchZip.generateAsync({ type: 'blob' });
+                
+                const totalSaved = totalOriginalSize - totalNewSize;
+                const totalSavedPercent = totalOriginalSize > 0 ? ((totalSaved / totalOriginalSize) * 100).toFixed(1) : 0;
+                
+                // Update stat boxes for batch
+                fileInfo.classList.add('visible');
+                fileName.textContent = `${batchFiles.length} files`;
+                fileSize.textContent = formatBytes(totalOriginalSize);
+                statTotal.textContent = results.filter(r => r.success).length;
+                statConverted.textContent = results.length;
+                statSize.textContent = formatBytes(totalNewSize);
+                if (totalSaved > 0) {
+                    statSaved.textContent = `${formatBytes(totalSaved)} (${totalSavedPercent}%)`;
+                } else {
+                    statSaved.textContent = `+${formatBytes(-totalSaved)}`;
+                }
+                
+                log(`Batch complete! ${results.filter(r => r.success).length}/${results.length} files converted`, 'success');
+                if (totalSaved > 0) {
+                    log(`Total: ${formatBytes(totalOriginalSize)} → ${formatBytes(totalNewSize)} — Saved ${formatBytes(totalSaved)} (${totalSavedPercent}%)`, 'success');
+                } else {
+                    log(`Total: ${formatBytes(totalOriginalSize)} → ${formatBytes(totalNewSize)} — Increased by ${formatBytes(-totalSaved)}`, 'warning');
+                }
+                
+                progressSection.classList.remove('visible');
+                convertBtn.style.display = 'none';
+                qualitySection.style.display = 'none';
+                completeSection.classList.add('visible');
+                downloadBtn.innerHTML = '<span>⬇️</span> Download All (ZIP)';
+            } else {
+                // Single file processing (original code)
+                if (!currentFile || !currentZip) return;
+                convertBtn.disabled = true; progressSection.classList.add('visible'); logSection.classList.add('visible'); clearLog(); progress(0, 'Reading...');
+                try {
+                    await processSingleFile();
+                } catch (e) { log('Error: ' + e.message, 'error'); console.error(e); convertBtn.disabled = false; }
+            }
+        };
+
+        async function processSingleFile() {
+            const zip = currentZip;
+            log('Loaded: ' + currentFile.name, 'info'); 
+            log('Quality: ' + jpegQuality + '%', 'info');
+            log('Light Novel Mode: ' + (enableSplitRotate ? 'ON' : 'OFF'), 'info');
+            
+            const renamed = {};
+            zip.forEach(p => { const l = p.toLowerCase(); if (l.match(/\.(png|gif|webp|bmp|jpeg)$/)) renamed[p] = p.replace(/\.(png|gif|webp|bmp|jpeg)$/i, '.jpg'); });
+            const imgs = []; zip.forEach(p => { if (p.toLowerCase().match(/\.(png|gif|webp|bmp|jpg|jpeg)$/)) imgs.push(p); });
+            statTotal.textContent = imgs.length; log(`Found ${imgs.length} images`);
+
+            let conv = 0, svgFix = 0, splitCount = 0;
+            const out = new JSZip(), entries = Object.entries(zip.files);
+            
+            // CRITICAL: Write mimetype FIRST per EPUB OCF spec
+            if (zip.files['mimetype']) {
+                const mimetypeData = await zip.files['mimetype'].async('arraybuffer');
+                out.file('mimetype', mimetypeData, { compression: 'STORE', createFolders: false });
+            }
+            
+            // Track split images: originalImageName -> [{path, xhtmlPath, id}, ...]
+            const splitImages = {};
+            // Track XHTML files that reference images (to update later)
+            const xhtmlFiles = {};
+            // Track OPF path and content
+            let opfPath = null, opfContent = null;
+            
+            // First pass: process images and collect info
+            for (let i = 0; i < entries.length; i++) {
+                const [path, file] = entries[i];
+                if (file.dir || path === 'mimetype') continue;
+                progress(10 + (i / entries.length) * 40, `Processing ${path.split('/').pop()}...`);
+                const low = path.toLowerCase();
+                
+                if (low.match(/\.(png|gif|webp|bmp|jpg|jpeg)$/)) {
+                    const data = await file.async('arraybuffer');
+                    const parts = await processImage(data);
+                    
+                    const baseName = path.replace(/\.[^.]+$/, '');
+                    const newExt = '.jpg';
+                    
+                    if (parts.length === 1 && parts[0].suffix === '') {
+                        const newPath = renamed[path] || path.replace(/\.[^.]+$/, newExt);
+                        out.file(newPath, parts[0].data, { compression: 'DEFLATE', createFolders: false });
+                        conv++;
+                    } else {
+                        const origName = path.split('/').pop();
+                        splitImages[origName] = [];
+                        
+                        for (const part of parts) {
+                            const partName = baseName.split('/').pop() + part.suffix + newExt;
+                            const partPath = (path.includes('/') ? path.substring(0, path.lastIndexOf('/') + 1) : '') + partName;
+                            out.file(partPath, part.data, { compression: 'DEFLATE', createFolders: false });
+                            splitImages[origName].push({ 
+                                path: partPath, 
+                                imgName: partName,
+                                id: baseName.split('/').pop() + part.suffix
+                            });
+                            splitCount++;
+                            conv++;
+                        }
+                        log(`Split ${origName} into ${parts.length} parts`, 'info');
+                    }
+                } else if (low.match(/\.(xhtml|html|htm)$/)) {
+                    xhtmlFiles[path] = await file.async('string');
+                } else if (low.endsWith('.opf')) {
+                    opfPath = path;
+                    opfContent = await file.async('string');
+                }
+            }
+            
+            // Second pass: update XHTML files - replace each split image with ALL its parts inline
+            progress(60, 'Updating XHTML files...');
+            
+            for (const [path, content] of Object.entries(xhtmlFiles)) {
+                let t = content;
+                const r = fixSvgCover(t); 
+                if (r.fixed) { t = r.c; svgFix++; log(`Fixed SVG: ${path.split('/').pop()}`, 'success'); }
+                
+                // Replace renamed images
+                for (const [o, n] of Object.entries(renamed)) {
+                    t = t.split(o.split('/').pop()).join(n.split('/').pop());
+                }
+                
+                // For split images: replace single img tag with multiple img tags (all parts)
+                for (const [origName, parts] of Object.entries(splitImages)) {
+                    const newName = origName.replace(/\.(png|gif|webp|bmp|jpeg)$/i, '.jpg');
+                    
+                    // Find and replace the whole block: <p|div>...<img>...</p|div>
+                    const blockRegex = new RegExp(
+                        `(<(?:p|div)[^>]*>\\s*<span>\\s*<img[^>]*src=["'][^"']*(?:${origName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}|${newName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})[^>]*/>\\s*</span>\\s*</(?:p|div)>)`,
+                        'gi'
+                    );
+                    
+                    t = t.replace(blockRegex, (match) => {
+                        let result = '';
+                        for (let i = 0; i < parts.length; i++) {
+                            if (i > 0) result += '\n';
+                            const newBlock = match
+                                .replace(origName, parts[i].imgName)
+                                .replace(newName, parts[i].imgName);
+                            result += newBlock;
+                        }
+                        return result;
+                    });
+                    
+                    // Also handle simpler cases: just <img> without wrapper
+                    const simpleImgRegex = new RegExp(
+                        `(<img[^>]*src=["'])([^"']*(?:${origName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}|${newName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}))([^>]*/>)`,
+                        'gi'
+                    );
+                    
+                    t = t.replace(simpleImgRegex, (match, before, src, after) => {
+                        let result = '';
+                        for (let i = 0; i < parts.length; i++) {
+                            if (i > 0) result += '\n';
+                            const partSrc = src.replace(origName, parts[i].imgName).replace(newName, parts[i].imgName);
+                            result += `${before}${partSrc}${after}`;
+                        }
+                        return result;
+                    });
+                }
+                
+                out.file(path, t, { compression: 'DEFLATE', createFolders: false });
+            }
+            
+            // Third pass: update OPF
+            progress(70, 'Updating OPF...');
+            if (opfContent) {
+                let t = opfContent;
+                
+                // Replace renamed images
+                for (const [o, n] of Object.entries(renamed)) {
+                    t = t.split(o.split('/').pop()).join(n.split('/').pop());
+                }
+                t = t.replace(/href="([^"]+\.jpg)"([^>]*)media-type="image\/(png|gif|webp|bmp)"/g, 'href="$1"$2media-type="image/jpeg"');
+                t = t.replace(/media-type="image\/(png|gif|webp|bmp)"([^>]*)href="([^"]+\.jpg)"/g, 'media-type="image/jpeg"$2href="$3"');
+                if (svgFix) t = t.replace(/\s+svg(?=["'\s>])/g, '');
+                
+                // Calculate OPF directory for relative paths
+                const opfDir = opfPath.includes('/') ? opfPath.substring(0, opfPath.lastIndexOf('/')) : '';
+                
+                // Add split images to manifest and update original image references
+                for (const [origName, parts] of Object.entries(splitImages)) {
+                    const origBaseName = origName.replace(/\.[^.]+$/, '');
+                    
+                    // Update original image reference to part1
+                    const origImgRegex = new RegExp(`(href=["'][^"']*/?)(${origBaseName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\.(?:jpg|jpeg|png|gif|webp|bmp)(["'])`, 'gi');
+                    t = t.replace(origImgRegex, `$1${origBaseName}_part1.jpg$3`);
+                    
+                    // Add manifest entries for parts 2, 3, etc. with correct relative paths
+                    let manifestAdditions = '';
+                    for (let j = 1; j < parts.length; j++) {
+                        const p = parts[j];
+                        // Calculate href relative to OPF directory
+                        let href;
+                        if (opfDir && p.path.startsWith(opfDir + '/')) {
+                            href = p.path.substring(opfDir.length + 1);
+                        } else if (opfDir) {
+                            href = p.path;
+                        } else {
+                            href = p.path;
+                        }
+                        manifestAdditions += `<item id="img-${p.id}" href="${href}" media-type="image/jpeg"/>\n`;
+                    }
+                    // Only replace first occurrence of </manifest>
+                    if (manifestAdditions && t.includes('</manifest>')) {
+                        t = t.replace('</manifest>', manifestAdditions + '</manifest>');
+                    }
+                }
+                
+                const cm = ensureCoverMeta(t); 
+                if (cm.fixed) { t = cm.o; log('Fixed cover meta', 'success'); }
+                
+                out.file(opfPath, t, { compression: 'DEFLATE', createFolders: false });
+            }
+
+            // Fourth pass: copy remaining files (skip mimetype - already written first)
+            progress(80, 'Copying remaining files...');
+            for (const [path, file] of entries) {
+                if (file.dir || path === 'mimetype') continue;
+                const low = path.toLowerCase();
+                
+                // Skip files we already processed
+                if (low.match(/\.(png|gif|webp|bmp|jpg|jpeg)$/) || 
+                    low.match(/\.(xhtml|html|htm)$/) || 
+                    low.endsWith('.opf')) {
+                    continue;
+                }
+                
+                let data = await file.async('arraybuffer');
+                
+                if (low.endsWith('.css') || low.endsWith('.ncx')) {
+                    let t = new TextDecoder().decode(data);
+                    for (const [o, n] of Object.entries(renamed)) {
+                        t = t.split(o.split('/').pop()).join(n.split('/').pop());
+                    }
+                    data = new TextEncoder().encode(t);
+                }
+                
+                out.file(path, data, { compression: 'DEFLATE', createFolders: false });
+            }
+
+            statConverted.textContent = conv; progress(100, 'Generating...');
+            log(`Converted ${conv} images`, 'success');
+            if (splitCount > 0) log(`Created ${splitCount} additional pages from splits`, 'info');
+            if (svgFix) log(`Fixed ${svgFix} SVG cover(s)`, 'success');
+            convertedBlob = await out.generateAsync({ type: 'blob', mimeType: 'application/epub+zip' });
+            
+            const originalSize = currentFile.size;
+            const newSize = convertedBlob.size;
+            const savedBytes = originalSize - newSize;
+            const savedPercent = ((savedBytes / originalSize) * 100).toFixed(1);
+            
+            statSize.textContent = formatBytes(newSize);
+            if (savedBytes > 0) {
+                statSaved.textContent = `${formatBytes(savedBytes)} (${savedPercent}%)`;
+                log(`New size: ${formatBytes(newSize)} — Saved ${formatBytes(savedBytes)} (${savedPercent}%)`, 'success');
+            } else {
+                statSaved.textContent = `+${formatBytes(-savedBytes)}`;
+                log(`New size: ${formatBytes(newSize)} — Increased by ${formatBytes(-savedBytes)}`, 'warning');
+            }
+            
+            // Post-conversion validation
+            log('Validating output...', 'info');
+            const finalZip = await JSZip.loadAsync(convertedBlob);
+            const postResult = await validateEpub(finalZip, true);
+            showValidation(postResult, true);
+            
+            progressSection.classList.remove('visible'); convertBtn.style.display = 'none'; qualitySection.style.display = 'none'; completeSection.classList.add('visible');
+        }
+
+        downloadBtn.onclick = () => { 
+            if (!convertedBlob) return; 
+            const a = document.createElement('a'); 
+            a.href = URL.createObjectURL(convertedBlob); 
+            if (isBatchMode) {
+                a.download = 'converted_epubs.zip';
+            } else {
+                a.download = currentFile.name.replace('.epub', '_baseline.epub'); 
+            }
+            a.click(); 
+        };
+        
+        resetBtn.onclick = () => { 
+            currentFile = convertedBlob = currentZip = null; 
+            batchFiles = []; batchResults = []; isBatchMode = false;
+            fileInput.value = ''; 
+            fileInfo.classList.remove('visible'); 
+            batchInfo.classList.remove('visible');
+            qualitySection.classList.remove('visible'); 
+            qualitySection.style.display = ''; 
+            progressSection.classList.remove('visible'); 
+            logSection.classList.remove('visible'); 
+            completeSection.classList.remove('visible'); 
+            validationSection.classList.remove('visible'); 
+            convertBtn.style.display = ''; 
+            convertBtn.disabled = true; 
+            downloadBtn.innerHTML = '<span>⬇️</span> Download EPUB';
+            clearLog(); 
+        };
+    </script>
+</body>
+</html>
