@@ -112,12 +112,33 @@
         .log-section { margin-top: 24px; display: none; }
         .log-section.visible { display: block; }
         .log-title { font-size: 0.85rem; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
-        .log-container { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 16px; max-height: 200px; overflow-y: auto; font-size: 0.8rem; line-height: 1.6; }
-        .log-entry { color: var(--text-secondary); }
+        .log-container { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 16px; max-height: 300px; overflow-y: auto; font-size: 0.8rem; line-height: 1.8; font-family: 'SF Mono', 'Consolas', 'Monaco', monospace; }
+        .log-entry { color: var(--text-secondary); display: flex; gap: 8px; align-items: flex-start; }
         .log-entry.success { color: var(--accent); }
         .log-entry.error { color: var(--error); }
         .log-entry.warning { color: var(--warning); }
         .log-entry.info { color: var(--info); }
+        .log-timestamp { color: var(--text-tertiary); font-size: 0.75rem; min-width: 52px; }
+        .log-tag { font-size: 0.7rem; font-weight: 600; padding: 1px 6px; border-radius: 3px; text-transform: uppercase; min-width: 56px; text-align: center; }
+        .log-tag.convert { background: #8b5cf620; color: #a78bfa; }
+        .log-tag.split { background: #f59e0b20; color: #fbbf24; }
+        .log-tag.fix { background: #22c55e20; color: #4ade80; }
+        .log-tag.skip { background: #6b728020; color: #9ca3af; }
+        .log-tag.info { background: #3b82f620; color: #60a5fa; }
+        .log-tag.error { background: #ef444420; color: #f87171; }
+        .log-tag.done { background: #10b98120; color: #34d399; }
+        .log-message { flex: 1; }
+        .log-detail { color: var(--text-tertiary); font-size: 0.75rem; }
+        .log-summary { background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; margin-top: 12px; overflow: hidden; }
+        .log-summary-title { background: var(--bg-secondary); padding: 10px 14px; font-weight: 600; font-size: 0.85rem; border-bottom: 1px solid var(--border); color: var(--accent); }
+        .log-summary-table { width: 100%; font-size: 0.8rem; }
+        .log-summary-table td { padding: 8px 14px; border-bottom: 1px solid var(--border); }
+        .log-summary-table tr:last-child td { border-bottom: none; }
+        .log-summary-table td:first-child { color: var(--text-tertiary); width: 45%; }
+        .log-summary-table td:last-child { color: var(--text-primary); font-weight: 500; text-align: right; }
+        .log-summary-table .highlight { color: var(--accent); }
+        .log-summary-table .saved { color: #4ade80; }
+        .log-summary-table .increased { color: #fbbf24; }
         .complete-section { text-align: center; padding: 32px; display: none; }
         .complete-section.visible { display: block; animation: slideUp 0.3s; }
         .complete-icon { font-size: 64px; margin-bottom: 16px; }
@@ -276,7 +297,7 @@
             </div>
         </div>
 
-        <footer>Made by <a href="#">Megabit & pablohc</a> • v2.2.2 • Runs entirely in your browser</footer>
+        <footer>Made by <a href="#">Megabit & pablohc</a> • v2.3.0 • Runs entirely in your browser</footer>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -430,8 +451,111 @@
         }
 
         function formatBytes(b) { if (!b) return '0 B'; const k = 1024, s = ['B','KB','MB','GB'], i = Math.floor(Math.log(b)/Math.log(k)); return (b/Math.pow(k,i)).toFixed(1)+' '+s[i]; }
-        function log(m, t='') { const e = document.createElement('div'); e.className = 'log-entry '+t; e.textContent = m; logContainer.appendChild(e); logContainer.scrollTop = logContainer.scrollHeight; }
-        function clearLog() { logContainer.innerHTML = ''; }
+        
+        // Enhanced logging system
+        let logStartTime = null;
+        let conversionStats = { images: 0, splits: 0, splitParts: 0, fixes: 0, skipped: 0, errors: 0, originalSize: 0, newSize: 0 };
+        
+        function getTimestamp() {
+            if (!logStartTime) return '[00:00.0]';
+            const elapsed = (Date.now() - logStartTime) / 1000;
+            const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+            const secs = (elapsed % 60).toFixed(1).padStart(4, '0');
+            return `[${mins}:${secs}]`;
+        }
+        
+        function log(message, type = '', tag = '') {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+            
+            // Timestamp
+            const timestamp = document.createElement('span');
+            timestamp.className = 'log-timestamp';
+            timestamp.textContent = getTimestamp();
+            entry.appendChild(timestamp);
+            
+            // Tag (if provided)
+            if (tag) {
+                const tagEl = document.createElement('span');
+                tagEl.className = 'log-tag ' + tag.toLowerCase();
+                tagEl.textContent = tag;
+                entry.appendChild(tagEl);
+            }
+            
+            // Message
+            const msg = document.createElement('span');
+            msg.className = 'log-message';
+            msg.innerHTML = message;
+            entry.appendChild(msg);
+            
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+        
+        function logImage(name, origW, origH, origFormat, origSize, newW, newH, newSize, wasSplit = false, splitCount = 0) {
+            const saved = origSize - newSize;
+            const savedPct = ((saved / origSize) * 100).toFixed(0);
+            const dims = `${origW}×${origH}`;
+            const newDims = `${newW}×${newH}`;
+            
+            if (wasSplit) {
+                conversionStats.splits++;
+                conversionStats.splitParts += splitCount;
+                log(`<strong>${name}</strong> <span class="log-detail">(${dims} ${origFormat.toUpperCase()}, ${formatBytes(origSize)}) → split into ${splitCount} parts</span>`, '', 'SPLIT');
+            } else {
+                conversionStats.images++;
+                const detail = saved > 0 
+                    ? `<span class="log-detail">(${dims} → ${newDims}, ${formatBytes(origSize)} → ${formatBytes(newSize)}, <span style="color:#4ade80">-${savedPct}%</span>)</span>`
+                    : `<span class="log-detail">(${dims} → ${newDims}, ${formatBytes(newSize)})</span>`;
+                log(`<strong>${name}</strong> ${detail}`, '', 'CONVERT');
+            }
+        }
+        
+        function logFix(type, detail) {
+            conversionStats.fixes++;
+            log(`${type}: <span class="log-detail">${detail}</span>`, 'success', 'FIX');
+        }
+        
+        function logSkip(name, reason) {
+            conversionStats.skipped++;
+            log(`${name} <span class="log-detail">(${reason})</span>`, '', 'SKIP');
+        }
+        
+        function logError(message) {
+            conversionStats.errors++;
+            log(message, 'error', 'ERROR');
+        }
+        
+        function logSummary(originalSize, newSize, timeElapsed) {
+            const saved = originalSize - newSize;
+            const savedPct = ((saved / originalSize) * 100).toFixed(1);
+            const totalImages = conversionStats.images + conversionStats.splits;
+            const totalOutput = conversionStats.images + conversionStats.splitParts;
+            
+            const summaryHtml = `
+                <div class="log-summary">
+                    <div class="log-summary-title">📊 Conversion Summary</div>
+                    <table class="log-summary-table">
+                        <tr><td>Images processed</td><td class="highlight">${totalImages}${conversionStats.splits > 0 ? ` (${conversionStats.splits} split → ${conversionStats.splitParts} parts)` : ''}</td></tr>
+                        <tr><td>Output images</td><td>${totalOutput}</td></tr>
+                        <tr><td>EPUB repairs</td><td>${conversionStats.fixes > 0 ? conversionStats.fixes + ' fixes applied' : 'None needed'}</td></tr>
+                        ${conversionStats.errors > 0 ? `<tr><td>Errors</td><td style="color:#f87171">${conversionStats.errors}</td></tr>` : ''}
+                        <tr><td>Original size</td><td>${formatBytes(originalSize)}</td></tr>
+                        <tr><td>New size</td><td>${formatBytes(newSize)}</td></tr>
+                        <tr><td>Saved</td><td class="${saved > 0 ? 'saved' : 'increased'}">${saved > 0 ? formatBytes(saved) + ' (' + savedPct + '%)' : '+' + formatBytes(-saved)}</td></tr>
+                        <tr><td>Time</td><td>${timeElapsed.toFixed(1)}s</td></tr>
+                    </table>
+                </div>
+            `;
+            logContainer.insertAdjacentHTML('beforeend', summaryHtml);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+        
+        function clearLog() { 
+            logContainer.innerHTML = ''; 
+            logStartTime = Date.now();
+            conversionStats = { images: 0, splits: 0, splitParts: 0, fixes: 0, skipped: 0, errors: 0, originalSize: 0, newSize: 0 };
+        }
         function progress(p, s) { progressBar.style.width = p+'%'; progressPercent.textContent = Math.round(p)+'%'; if (s) progressStatus.textContent = s; }
 
         dropZone.onclick = () => fileInput.click();
@@ -623,6 +747,8 @@
                 img.onload = async () => {
                     URL.revokeObjectURL(url);
                     const origW = img.width, origH = img.height;
+                    const origSize = data.byteLength;
+                    const origFormat = 'image'; // Will be refined by caller based on extension
                     
                     // Check if horizontal (wider than tall) AND doesn't fit in 480x800
                     const isHorizontal = origW > origH;
@@ -678,7 +804,10 @@
                             // No split needed - width fits
                             const blob = await new Promise(res => rotCanvas.toBlob(res, 'image/jpeg', jpegQuality/100));
                             const arrBuf = await blob.arrayBuffer();
-                            resolve([{ data: arrBuf, suffix: '' }]);
+                            resolve({ 
+                                parts: [{ data: arrBuf, suffix: '', width: rotW, height: rotH }],
+                                meta: { origW, origH, origSize, wasSplit: false, rotated: true }
+                            });
                         } else {
                             // Split by WIDTH (vertical cuts) - from RIGHT to LEFT
                             // After 90° CW rotation: right side becomes top, left becomes bottom
@@ -706,9 +835,12 @@
                                 
                                 const blob = await new Promise(res => partCanvas.toBlob(res, 'image/jpeg', jpegQuality/100));
                                 const arrBuf = await blob.arrayBuffer();
-                                parts.push({ data: arrBuf, suffix: `_part${i + 1}` });
+                                parts.push({ data: arrBuf, suffix: `_part${i + 1}`, width: partW, height: rotH });
                             }
-                            resolve(parts);
+                            resolve({ 
+                                parts,
+                                meta: { origW, origH, origSize, wasSplit: true, splitCount: numParts, rotated: true }
+                            });
                         }
                     } else {
                         // NOT rotating - check if we need to scale at all
@@ -727,7 +859,10 @@
 
                             const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', jpegQuality/100));
                             const arrBuf = await blob.arrayBuffer();
-                            resolve([{ data: arrBuf, suffix: '' }]);
+                            resolve({ 
+                                parts: [{ data: arrBuf, suffix: '', width: origW, height: origH }],
+                                meta: { origW, origH, origSize, wasSplit: false, scaled: false }
+                            });
                         } else {
                             // Image too big - scale to fit 480x800 (keep aspect ratio)
                             const scale = Math.min(MAX_WIDTH / origW, MAX_HEIGHT / origH);
@@ -747,7 +882,10 @@
 
                             const blob = await new Promise(res => c.toBlob(res, 'image/jpeg', jpegQuality/100));
                             const arrBuf = await blob.arrayBuffer();
-                            resolve([{ data: arrBuf, suffix: '' }]);
+                            resolve({ 
+                                parts: [{ data: arrBuf, suffix: '', width: newW, height: newH }],
+                                meta: { origW, origH, origSize, wasSplit: false, scaled: true, newW, newH }
+                            });
                         }
                     }
                 };
@@ -784,7 +922,8 @@
                 
                 if (low.match(/\.(png|gif|webp|bmp|jpg|jpeg)$/)) {
                     const data = await fileObj.async('arraybuffer');
-                    const parts = await processImage(data);
+                    const result = await processImage(data);
+                    const { parts } = result;
                     
                     const baseName = path.replace(/\.[^.]+$/, '');
                     const newExt = '.jpg';
@@ -980,10 +1119,8 @@
                 clearLog();
                 
                 const results = [];
-                log(`Starting batch conversion of ${batchFiles.length} files...`, 'info');
-                log('Quality: ' + jpegQuality + '%', 'info');
-                log('Light Novel Mode: ' + (enableSplitRotate ? 'ON' : 'OFF'), 'info');
-                log('Grayscale: ' + (enableGrayscale ? 'ON' : 'OFF'), 'info');
+                log(`Batch conversion: <strong>${batchFiles.length} files</strong>`, '', 'INFO');
+                log(`Quality: ${jpegQuality}% | Light Novel: ${enableSplitRotate ? 'ON' : 'OFF'} | Grayscale: ${enableGrayscale ? 'ON' : 'OFF'}`, '', 'INFO');
                 
                 let totalOriginalSize = 0;
                 let totalNewSize = 0;
@@ -994,7 +1131,7 @@
                     updateBatchList();
                     
                     try {
-                        log(`[${i+1}/${batchFiles.length}] Converting: ${file.name}`, 'info');
+                        log(`<strong>${file.name}</strong> <span class="log-detail">(${formatBytes(file.size)})</span>`, '', 'CONVERT');
                         progress((i / batchFiles.length) * 100, `Converting ${file.name}...`);
                         
                         const blob = await convertSingleFile(file, (p) => {
@@ -1011,14 +1148,14 @@
                         batchResults[i] = 'done';
                         
                         if (savedBytes > 0) {
-                            log(`✓ ${file.name}: ${formatBytes(file.size)} → ${formatBytes(blob.size)} (saved ${savedPercent}%)`, 'success');
+                            log(`✓ ${file.name}: <span class="log-detail">${formatBytes(file.size)} → ${formatBytes(blob.size)} (<span style="color:#4ade80">-${savedPercent}%</span>)</span>`, 'success', 'DONE');
                         } else {
-                            log(`✓ ${file.name}: ${formatBytes(file.size)} → ${formatBytes(blob.size)} (+${formatBytes(-savedBytes)})`, 'warning');
+                            log(`✓ ${file.name}: <span class="log-detail">${formatBytes(file.size)} → ${formatBytes(blob.size)} (+${formatBytes(-savedBytes)})</span>`, 'warning', 'DONE');
                         }
                     } catch (e) {
                         results.push({ name: file.name, error: e.message, success: false });
                         batchResults[i] = 'error';
-                        log(`✗ ${file.name}: ${e.message}`, 'error');
+                        log(`${file.name}: ${e.message}`, 'error', 'ERROR');
                     }
                     updateBatchList();
                 }
@@ -1037,6 +1174,7 @@
                 
                 const totalSaved = totalOriginalSize - totalNewSize;
                 const totalSavedPercent = totalOriginalSize > 0 ? ((totalSaved / totalOriginalSize) * 100).toFixed(1) : 0;
+                const batchTimeElapsed = (Date.now() - logStartTime) / 1000;
                 
                 // Update stat boxes for batch
                 fileInfo.classList.add('visible');
@@ -1051,12 +1189,24 @@
                     statSaved.textContent = `+${formatBytes(-totalSaved)}`;
                 }
                 
-                log(`Batch complete! ${results.filter(r => r.success).length}/${results.length} files converted`, 'success');
-                if (totalSaved > 0) {
-                    log(`Total: ${formatBytes(totalOriginalSize)} → ${formatBytes(totalNewSize)} — Saved ${formatBytes(totalSaved)} (${totalSavedPercent}%)`, 'success');
-                } else {
-                    log(`Total: ${formatBytes(totalOriginalSize)} → ${formatBytes(totalNewSize)} — Increased by ${formatBytes(-totalSaved)}`, 'warning');
-                }
+                // Batch summary
+                const successCount = results.filter(r => r.success).length;
+                const failCount = results.length - successCount;
+                const summaryHtml = `
+                    <div class="log-summary">
+                        <div class="log-summary-title">📊 Batch Summary</div>
+                        <table class="log-summary-table">
+                            <tr><td>Files processed</td><td class="highlight">${successCount}/${results.length}</td></tr>
+                            ${failCount > 0 ? `<tr><td>Failed</td><td style="color:#f87171">${failCount}</td></tr>` : ''}
+                            <tr><td>Total original size</td><td>${formatBytes(totalOriginalSize)}</td></tr>
+                            <tr><td>Total new size</td><td>${formatBytes(totalNewSize)}</td></tr>
+                            <tr><td>Total saved</td><td class="${totalSaved > 0 ? 'saved' : 'increased'}">${totalSaved > 0 ? formatBytes(totalSaved) + ' (' + totalSavedPercent + '%)' : '+' + formatBytes(-totalSaved)}</td></tr>
+                            <tr><td>Time</td><td>${batchTimeElapsed.toFixed(1)}s</td></tr>
+                        </table>
+                    </div>
+                `;
+                logContainer.insertAdjacentHTML('beforeend', summaryHtml);
+                logContainer.scrollTop = logContainer.scrollHeight;
                 
                 progressSection.classList.remove('visible');
                 convertBtn.style.display = 'none';
@@ -1069,21 +1219,19 @@
                 convertBtn.disabled = true; progressSection.classList.add('visible'); logSection.classList.add('visible'); clearLog(); progress(0, 'Reading...');
                 try {
                     await processSingleFile();
-                } catch (e) { log('Error: ' + e.message, 'error'); console.error(e); convertBtn.disabled = false; }
+                } catch (e) { logError('Conversion failed: ' + e.message); console.error(e); convertBtn.disabled = false; }
             }
         };
 
         async function processSingleFile() {
             const zip = currentZip;
-            log('Loaded: ' + currentFile.name, 'info'); 
-            log('Quality: ' + jpegQuality + '%', 'info');
-            log('Light Novel Mode: ' + (enableSplitRotate ? 'ON' : 'OFF'), 'info');
-            log('Grayscale: ' + (enableGrayscale ? 'ON' : 'OFF'), 'info');
+            log(`<strong>${currentFile.name}</strong> <span class="log-detail">(${formatBytes(currentFile.size)})</span>`, '', 'INFO'); 
+            log(`Quality: ${jpegQuality}% | Light Novel: ${enableSplitRotate ? 'ON' : 'OFF'} | Grayscale: ${enableGrayscale ? 'ON' : 'OFF'}`, '', 'INFO');
             
             const renamed = {};
             zip.forEach(p => { const l = p.toLowerCase(); if (l.match(/\.(png|gif|webp|bmp|jpeg)$/)) renamed[p] = p.replace(/\.(png|gif|webp|bmp|jpeg)$/i, '.jpg'); });
             const imgs = []; zip.forEach(p => { if (p.toLowerCase().match(/\.(png|gif|webp|bmp|jpg|jpeg)$/)) imgs.push(p); });
-            statTotal.textContent = imgs.length; log(`Found ${imgs.length} images`);
+            statTotal.textContent = imgs.length; log(`Found <strong>${imgs.length}</strong> images to process`, '', 'INFO');
 
             let conv = 0, svgFix = 0, splitCount = 0;
             const out = new JSZip(), entries = Object.entries(zip.files);
@@ -1110,7 +1258,10 @@
                 
                 if (low.match(/\.(png|gif|webp|bmp|jpg|jpeg)$/)) {
                     const data = await file.async('arraybuffer');
-                    const parts = await processImage(data);
+                    const result = await processImage(data);
+                    const { parts, meta } = result;
+                    const origFormat = path.split('.').pop().toUpperCase();
+                    const fileName = path.split('/').pop();
                     
                     const baseName = path.replace(/\.[^.]+$/, '');
                     const newExt = '.jpg';
@@ -1119,10 +1270,16 @@
                         const newPath = renamed[path] || path.replace(/\.[^.]+$/, newExt);
                         out.file(newPath, parts[0].data, { compression: 'DEFLATE', createFolders: false });
                         conv++;
+                        
+                        // Log detailed image info
+                        const newSize = parts[0].data.byteLength;
+                        const newW = parts[0].width, newH = parts[0].height;
+                        logImage(fileName, meta.origW, meta.origH, origFormat, meta.origSize, newW, newH, newSize, false, 0);
                     } else {
                         const origName = path.split('/').pop();
                         splitImages[origName] = [];
                         
+                        let totalNewSize = 0;
                         for (const part of parts) {
                             const partName = baseName.split('/').pop() + part.suffix + newExt;
                             const partPath = (path.includes('/') ? path.substring(0, path.lastIndexOf('/') + 1) : '') + partName;
@@ -1135,8 +1292,11 @@
                             });
                             splitCount++;
                             conv++;
+                            totalNewSize += part.data.byteLength;
                         }
-                        log(`Split ${origName} into ${parts.length} parts`, 'info');
+                        
+                        // Log split image
+                        logImage(fileName, meta.origW, meta.origH, origFormat, meta.origSize, 0, 0, totalNewSize, true, parts.length);
                     }
                 } else if (low.match(/\.(xhtml|html|htm)$/)) {
                     xhtmlFiles[path] = await file.async('string');
@@ -1152,10 +1312,10 @@
             for (const [path, content] of Object.entries(xhtmlFiles)) {
                 let t = content;
                 const r = fixSvgCover(t); 
-                if (r.fixed) { t = r.c; svgFix += r.count || 1; log(`Fixed SVG cover: ${path.split('/').pop()}`, 'success'); }
+                if (r.fixed) { t = r.c; svgFix += r.count || 1; logFix('SVG cover', path.split('/').pop()); }
                 
                 const r2 = fixSvgWrappedImages(t);
-                if (r2.fixed) { t = r2.c; svgFix += r2.count || 1; log(`Unwrapped ${r2.count} SVG image(s): ${path.split('/').pop()}`, 'success'); }
+                if (r2.fixed) { t = r2.c; svgFix += r2.count || 1; logFix(`SVG images (${r2.count})`, path.split('/').pop()); }
                 
                 // Replace renamed images
                 for (const [o, n] of Object.entries(renamed)) {
@@ -1255,7 +1415,7 @@
                 }
                 
                 const cm = ensureCoverMeta(t); 
-                if (cm.fixed) { t = cm.o; log('Fixed cover meta', 'success'); }
+                if (cm.fixed) { t = cm.o; logFix('Cover meta', 'Added to OPF manifest'); }
                 
                 out.file(opfPath, t, { compression: 'DEFLATE', createFolders: false });
             }
@@ -1311,8 +1471,12 @@
                     }
                     // Sync NCX identifier with OPF
                     if (mainIdentifier) {
+                        const oldNcx = t;
                         t = t.replace(/<meta\s+name=["']dtb:uid["']\s+content=["'][^"']*["']\s*\/?>/gi, 
                             `<meta name="dtb:uid" content="${mainIdentifier}"/>`);
+                        if (t !== oldNcx) {
+                            logFix('NCX identifier', 'Synced with OPF');
+                        }
                     }
                     data = new TextEncoder().encode(t);
                 }
@@ -1321,27 +1485,27 @@
             }
 
             statConverted.textContent = conv; progress(100, 'Generating...');
-            log(`Converted ${conv} images`, 'success');
-            if (splitCount > 0) log(`Created ${splitCount} additional pages from splits`, 'info');
-            if (svgFix) log(`Fixed ${svgFix} SVG image wrapper(s)`, 'success');
             convertedBlob = await out.generateAsync({ type: 'blob', mimeType: 'application/epub+zip' });
             
             const originalSize = currentFile.size;
             const newSize = convertedBlob.size;
             const savedBytes = originalSize - newSize;
             const savedPercent = ((savedBytes / originalSize) * 100).toFixed(1);
+            const timeElapsed = (Date.now() - logStartTime) / 1000;
             
             statSize.textContent = formatBytes(newSize);
             if (savedBytes > 0) {
                 statSaved.textContent = `${formatBytes(savedBytes)} (${savedPercent}%)`;
-                log(`New size: ${formatBytes(newSize)} — Saved ${formatBytes(savedBytes)} (${savedPercent}%)`, 'success');
             } else {
                 statSaved.textContent = `+${formatBytes(-savedBytes)}`;
-                log(`New size: ${formatBytes(newSize)} — Increased by ${formatBytes(-savedBytes)}`, 'warning');
             }
             
+            // Log summary table
+            log('Conversion complete!', 'success', 'DONE');
+            logSummary(originalSize, newSize, timeElapsed);
+            
             // Post-conversion validation
-            log('Validating output...', 'info');
+            log('Validating output...', '', 'INFO');
             const finalZip = await JSZip.loadAsync(convertedBlob);
             const postResult = await validateEpub(finalZip, true);
             showValidation(postResult, true);
