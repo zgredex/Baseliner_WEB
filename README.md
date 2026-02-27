@@ -144,6 +144,12 @@ Typical compression results (85% quality, grayscale enabled):
 
 ## Changelog
 
+### v2.3.0
+- Enhanced logging system with timestamps and colored tags
+- Per-image logging with dimensions, format, and compression stats
+- Visual summary table at end of conversion
+- Batch processing summary with total stats
+
 ### v2.2.2
 - NCX `dtb:uid` syncs with OPF `dc:identifier`
 - Fixed duplicate ID issue when splitting images (part suffix appended)
