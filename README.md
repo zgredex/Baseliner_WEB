@@ -4,7 +4,6 @@ A browser-based tool for optimizing EPUB files for e-ink readers. Converts image
 
 **No installation required · Works 100% offline after loading**
 
-
 <img width="1512" height="949" alt="Zrzut ekranu 2026-02-27 o 16 43 17" src="https://github.com/user-attachments/assets/d9e9ba82-285a-46df-9af7-921a26b0f104" />
 
 ## Features
@@ -159,4 +158,4 @@ Issues and pull requests welcome! Please test with various EPUB sources before s
 
 Made by **Megabit & pablohc**
 
-Optimized for [CrossPoint Reader](https://github.com/user/crosspoint) and XTEink X4 e-readers.
+Optimized for [CrossPoint Reader](https://github.com/crosspoint-reader/crosspoint-reader) and XTEink X4 e-readers.
