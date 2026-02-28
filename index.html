@@ -139,6 +139,27 @@
         .log-summary-table .highlight { color: var(--accent); }
         .log-summary-table .saved { color: #4ade80; }
         .log-summary-table .increased { color: #fbbf24; }
+        .image-picker { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-top: 24px; display: none; }
+        .image-picker.visible { display: block; animation: slideUp 0.3s; }
+        .image-picker-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+        .image-picker-title { font-size: 0.95rem; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; }
+        .image-picker-title span { font-size: 1.1rem; }
+        .image-picker-count { font-size: 0.85rem; color: var(--accent); background: var(--bg-tertiary); padding: 4px 10px; border-radius: 12px; }
+        .image-picker-actions { display: flex; gap: 8px; margin-bottom: 16px; }
+        .image-picker-actions button { padding: 6px 12px; font-size: 0.8rem; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 6px; color: var(--text-secondary); cursor: pointer; transition: all 0.2s; }
+        .image-picker-actions button:hover { background: var(--border); color: var(--text-primary); }
+        .image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; max-height: 400px; overflow-y: auto; padding: 4px; }
+        .image-thumb { position: relative; aspect-ratio: 1; background: var(--bg-tertiary); border: 2px solid var(--border); border-radius: 8px; cursor: pointer; overflow: hidden; transition: all 0.2s; }
+        .image-thumb:hover { border-color: var(--accent-dim); transform: scale(1.02); }
+        .image-thumb.selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow), 0 4px 12px var(--accent-glow); }
+        .image-thumb img { width: 100%; height: 100%; object-fit: contain; padding: 4px; }
+        .image-thumb-overlay { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, transparent 50%); opacity: 0; transition: opacity 0.2s; }
+        .image-thumb:hover .image-thumb-overlay { opacity: 1; }
+        .image-thumb.selected .image-thumb-overlay { opacity: 1; background: linear-gradient(to top, rgba(167,139,250,0.4) 0%, transparent 50%); }
+        .image-thumb-info { position: absolute; bottom: 0; left: 0; right: 0; padding: 6px; font-size: 0.65rem; color: white; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .image-thumb-badge { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; background: var(--accent); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; opacity: 0; transform: scale(0.5); transition: all 0.2s; }
+        .image-thumb.selected .image-thumb-badge { opacity: 1; transform: scale(1); }
+        .image-thumb-dims { position: absolute; top: 6px; left: 6px; font-size: 0.6rem; background: rgba(0,0,0,0.6); color: white; padding: 2px 5px; border-radius: 4px; }
         .complete-section { text-align: center; padding: 32px; display: none; }
         .complete-section.visible { display: block; animation: slideUp 0.3s; }
         .complete-icon { font-size: 64px; margin-bottom: 16px; }
@@ -240,13 +261,10 @@
             <div class="toggle-section">
                 <div class="toggle-row">
                     <div class="toggle-info">
-                        <div class="toggle-title">📖 Light Novel Mode</div>
-                        <div class="toggle-desc">Rotate wide images 90° and split into pages for vertical reading (480×800 screen)</div>
+                        <div class="toggle-title">🔄 Rotate & Split</div>
+                        <div class="toggle-desc">Select images below to rotate 90° CW and split into multiple pages</div>
                     </div>
-                    <label class="toggle-switch">
-                        <input type="checkbox" id="split-rotate-toggle">
-                        <span class="toggle-slider"></span>
-                    </label>
+                    <span class="image-picker-count" id="split-count">0 selected</span>
                 </div>
                 <div class="toggle-row">
                     <div class="toggle-info">
@@ -259,6 +277,19 @@
                     </label>
                 </div>
             </div>
+        </div>
+
+        <div class="image-picker" id="image-picker">
+            <div class="image-picker-header">
+                <span class="image-picker-title"><span>🖼️</span> Select Images to Rotate & Split</span>
+                <span class="image-picker-count" id="picker-count">0 / 0 selected</span>
+            </div>
+            <div class="image-picker-actions">
+                <button id="select-landscape-btn">Select Landscape</button>
+                <button id="select-all-btn">Select All</button>
+                <button id="select-none-btn">Clear Selection</button>
+            </div>
+            <div class="image-grid" id="image-grid"></div>
         </div>
 
         <div class="progress-section" id="progress-section">
@@ -288,7 +319,7 @@
             <div class="features-grid">
                 <div class="feature-item"><span class="feature-check">✓</span> Converts PNG/GIF/WebP/BMP → baseline JPEG (1-95% quality)</div>
                 <div class="feature-item"><span class="feature-check">✓</span> Scales images to fit e-reader screen (480×800 default)</div>
-                <div class="feature-item"><span class="feature-check">✓</span> Light Novel Mode: rotates 90° CW + splits wide images with overlap</div>
+                <div class="feature-item"><span class="feature-check">✓</span> Rotate & Split: select images to rotate 90° CW and split into pages</div>
                 <div class="feature-item"><span class="feature-check">✓</span> Grayscale conversion for e-ink displays</div>
                 <div class="feature-item"><span class="feature-check">✓</span> Fixes SVG covers and SVG-wrapped images</div>
                 <div class="feature-item"><span class="feature-check">✓</span> Repairs EPUB metadata (cover meta, manifest, NCX sync)</div>
@@ -297,7 +328,7 @@
             </div>
         </div>
 
-        <footer>Made by <a href="#">Megabit & pablohc</a> • v2.3.0 • Runs entirely in your browser</footer>
+        <footer>Made by <a href="#">Megabit & pablohc</a> • v2.5.0 • Runs entirely in your browser</footer>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -315,11 +346,17 @@
         const validationSection = $('validation-section'), validationIcon = $('validation-icon');
         const validationTitle = $('validation-title'), validationIssues = $('validation-issues');
         const batchInfo = $('batch-info'), batchList = $('batch-list'), batchCount = $('batch-count');
+        const imagePicker = $('image-picker'), imageGrid = $('image-grid');
+        const pickerCount = $('picker-count'), splitCount = $('split-count');
+        const selectLandscapeBtn = $('select-landscape-btn'), selectAllBtn = $('select-all-btn'), selectNoneBtn = $('select-none-btn');
 
         let currentFile = null, convertedBlob = null, jpegQuality = 85, currentZip = null;
         let batchFiles = [], batchResults = [], isBatchMode = false;
-        let enableSplitRotate = false; // toggle for split & rotate
         let enableGrayscale = true;    // toggle for grayscale conversion (default ON)
+        
+        // Image picker state
+        let selectedForSplit = new Set();  // Set of image paths selected for Rotate & Split
+        let imageMetadata = {};            // path -> {width, height, blobUrl}
 
         async function validateEpub(zip, isAfter = false) {
             const issues = [];
@@ -440,9 +477,197 @@
         qualityPresets.forEach(b => b.onclick = () => { jpegQuality = +b.dataset.value; qualitySlider.value = qualityInput.value = jpegQuality; updatePresets(); });
         function updatePresets() { qualityPresets.forEach(b => b.classList.toggle('active', +b.dataset.value === jpegQuality)); }
         
-        // Toggle handler
-        const splitRotateToggle = document.getElementById('split-rotate-toggle');
-        splitRotateToggle.onchange = () => { enableSplitRotate = splitRotateToggle.checked; };
+        // Image picker functions
+        function updatePickerCount() {
+            const total = Object.keys(imageMetadata).length;
+            const selected = selectedForSplit.size;
+            pickerCount.textContent = `${selected} / ${total} selected`;
+            splitCount.textContent = `${selected} selected`;
+        }
+        
+        function toggleImageSelection(path) {
+            if (selectedForSplit.has(path)) {
+                selectedForSplit.delete(path);
+            } else {
+                selectedForSplit.add(path);
+            }
+            // Update thumbnail visual state
+            const thumb = document.querySelector(`.image-thumb[data-path="${CSS.escape(path)}"]`);
+            if (thumb) {
+                thumb.classList.toggle('selected', selectedForSplit.has(path));
+            }
+            updatePickerCount();
+        }
+        
+        async function loadImageThumbnails(zip) {
+            imageGrid.innerHTML = '';
+            selectedForSplit.clear();
+            imageMetadata = {};
+            
+            // Get all images in the EPUB
+            const allImages = new Set();
+            zip.forEach(p => { 
+                if (p.toLowerCase().match(/\.(png|gif|webp|bmp|jpg|jpeg)$/)) allImages.add(p); 
+            });
+            
+            // Try to get images in reading order from OPF spine
+            let orderedImages = [];
+            try {
+                // Find OPF file
+                let opfPath = null;
+                zip.forEach(p => { if (p.toLowerCase().endsWith('.opf')) opfPath = p; });
+                
+                if (opfPath) {
+                    const opfContent = await zip.files[opfPath].async('string');
+                    const opfDir = opfPath.includes('/') ? opfPath.substring(0, opfPath.lastIndexOf('/')) : '';
+                    
+                    // Parse manifest to get id -> href mapping
+                    const manifest = {};
+                    const manifestRegex = /<item[^>]+id=["']([^"']+)["'][^>]+href=["']([^"']+)["'][^>]*>/gi;
+                    let match;
+                    while ((match = manifestRegex.exec(opfContent)) !== null) {
+                        const id = match[1];
+                        const href = match[2];
+                        const fullPath = opfDir ? opfDir + '/' + href : href;
+                        manifest[id] = fullPath;
+                    }
+                    // Also check reversed attribute order
+                    const manifestRegex2 = /<item[^>]+href=["']([^"']+)["'][^>]+id=["']([^"']+)["'][^>]*>/gi;
+                    while ((match = manifestRegex2.exec(opfContent)) !== null) {
+                        const href = match[1];
+                        const id = match[2];
+                        const fullPath = opfDir ? opfDir + '/' + href : href;
+                        manifest[id] = fullPath;
+                    }
+                    
+                    // Parse spine to get reading order
+                    const spineOrder = [];
+                    const spineRegex = /<itemref[^>]+idref=["']([^"']+)["'][^>]*>/gi;
+                    while ((match = spineRegex.exec(opfContent)) !== null) {
+                        const idref = match[1];
+                        if (manifest[idref]) spineOrder.push(manifest[idref]);
+                    }
+                    
+                    // For each spine item (XHTML), extract images in order
+                    const seenImages = new Set();
+                    for (const xhtmlPath of spineOrder) {
+                        if (!zip.files[xhtmlPath]) continue;
+                        const xhtmlContent = await zip.files[xhtmlPath].async('string');
+                        const xhtmlDir = xhtmlPath.includes('/') ? xhtmlPath.substring(0, xhtmlPath.lastIndexOf('/')) : '';
+                        
+                        // Find all image references
+                        const imgRegex = /(?:src|xlink:href)=["']([^"']+)["']/gi;
+                        while ((match = imgRegex.exec(xhtmlContent)) !== null) {
+                            let imgHref = match[1];
+                            // Resolve relative path
+                            let imgPath;
+                            if (imgHref.startsWith('../')) {
+                                // Go up from xhtmlDir
+                                const parts = xhtmlDir.split('/');
+                                parts.pop();
+                                imgPath = parts.join('/') + '/' + imgHref.substring(3);
+                            } else if (imgHref.startsWith('/')) {
+                                imgPath = imgHref.substring(1);
+                            } else {
+                                imgPath = xhtmlDir ? xhtmlDir + '/' + imgHref : imgHref;
+                            }
+                            // Normalize path
+                            imgPath = imgPath.replace(/\/+/g, '/');
+                            
+                            // Check if this is actually an image in our list
+                            for (const realPath of allImages) {
+                                if (realPath === imgPath || realPath.endsWith('/' + imgHref) || realPath.endsWith(imgHref)) {
+                                    if (!seenImages.has(realPath)) {
+                                        seenImages.add(realPath);
+                                        orderedImages.push(realPath);
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Add any remaining images that weren't in XHTML files (e.g., unused images)
+                    for (const imgPath of allImages) {
+                        if (!seenImages.has(imgPath)) {
+                            orderedImages.push(imgPath);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to parse reading order, using default:', e);
+            }
+            
+            // Fallback to alphabetical if parsing failed
+            if (orderedImages.length === 0) {
+                orderedImages = [...allImages].sort();
+            }
+            
+            // Load thumbnails in order
+            for (const path of orderedImages) {
+                try {
+                    const data = await zip.files[path].async('arraybuffer');
+                    const blob = new Blob([data]);
+                    const blobUrl = URL.createObjectURL(blob);
+                    
+                    // Get image dimensions
+                    const dimensions = await new Promise((resolve) => {
+                        const img = new Image();
+                        img.onload = () => resolve({ width: img.width, height: img.height });
+                        img.onerror = () => resolve({ width: 0, height: 0 });
+                        img.src = blobUrl;
+                    });
+                    
+                    imageMetadata[path] = { ...dimensions, blobUrl };
+                    
+                    // Create thumbnail element
+                    const thumb = document.createElement('div');
+                    thumb.className = 'image-thumb';
+                    thumb.dataset.path = path;
+                    thumb.innerHTML = `
+                        <img src="${blobUrl}" alt="${path.split('/').pop()}">
+                        <div class="image-thumb-dims">${dimensions.width}×${dimensions.height}</div>
+                        <div class="image-thumb-overlay"></div>
+                        <div class="image-thumb-info">${path.split('/').pop()}</div>
+                        <div class="image-thumb-badge">✓</div>
+                    `;
+                    thumb.onclick = () => toggleImageSelection(path);
+                    imageGrid.appendChild(thumb);
+                } catch (e) {
+                    console.warn('Failed to load thumbnail:', path, e);
+                }
+            }
+            
+            updatePickerCount();
+            imagePicker.classList.add('visible');
+        }
+        
+        // Image picker action buttons
+        selectLandscapeBtn.onclick = () => {
+            for (const [path, meta] of Object.entries(imageMetadata)) {
+                if (meta.width > meta.height) {
+                    selectedForSplit.add(path);
+                    const thumb = document.querySelector(`.image-thumb[data-path="${CSS.escape(path)}"]`);
+                    if (thumb) thumb.classList.add('selected');
+                }
+            }
+            updatePickerCount();
+        };
+        
+        selectAllBtn.onclick = () => {
+            for (const path of Object.keys(imageMetadata)) {
+                selectedForSplit.add(path);
+                const thumb = document.querySelector(`.image-thumb[data-path="${CSS.escape(path)}"]`);
+                if (thumb) thumb.classList.add('selected');
+            }
+            updatePickerCount();
+        };
+        
+        selectNoneBtn.onclick = () => {
+            selectedForSplit.clear();
+            document.querySelectorAll('.image-thumb.selected').forEach(t => t.classList.remove('selected'));
+            updatePickerCount();
+        };
 
         const grayscaleToggle = document.getElementById('grayscale-toggle');
         if (grayscaleToggle) {
@@ -602,6 +827,14 @@
                 batchInfo.classList.add('visible');
                 fileInfo.classList.remove('visible');
                 validationSection.classList.remove('visible');
+                imagePicker.classList.remove('visible');
+                // Clean up any previous image picker state
+                for (const meta of Object.values(imageMetadata)) {
+                    if (meta.blobUrl) URL.revokeObjectURL(meta.blobUrl);
+                }
+                selectedForSplit.clear();
+                imageMetadata = {};
+                imageGrid.innerHTML = '';
                 updateBatchList();
                 qualitySection.classList.add('visible');
                 convertBtn.disabled = false;
@@ -614,6 +847,7 @@
             validationSection.classList.remove('visible', 'success', 'warning', 'error');
             validationIcon.textContent = '🔍'; validationTitle.textContent = 'Validating EPUB...';
             validationIssues.innerHTML = ''; validationSection.classList.add('visible');
+            imagePicker.classList.remove('visible');
             
             completeSection.classList.remove('visible'); 
             statTotal.textContent = statConverted.textContent = statSize.textContent = statSaved.textContent = '-'; 
@@ -624,7 +858,11 @@
                 const result = await validateEpub(currentZip, false);
                 statTotal.textContent = result.imgCount;
                 showValidation(result, false);
-                qualitySection.classList.add('visible'); 
+                qualitySection.classList.add('visible');
+                
+                // Load image thumbnails for Rotate & Split selection
+                await loadImageThumbnails(currentZip);
+                
                 convertBtn.disabled = false;
             } catch (e) {
                 validationSection.classList.add('error');
@@ -740,7 +978,7 @@
         }
 
         // Process image: returns array of {data, suffix} objects
-        async function processImage(data) {
+        async function processImage(data, imagePath = '') {
             return new Promise((resolve, reject) => {
                 const url = URL.createObjectURL(new Blob([data]));
                 const img = new Image();
@@ -750,23 +988,15 @@
                     const origSize = data.byteLength;
                     const origFormat = 'image'; // Will be refined by caller based on extension
                     
-                    // Check if horizontal (wider than tall) AND doesn't fit in 480x800
-                    const isHorizontal = origW > origH;
-                    const exceedsScreen = origW > MAX_WIDTH || origH > MAX_HEIGHT;  // > 480 or > 800
-                    const needsRotation = isHorizontal && exceedsScreen;
+                    // Check if this image is selected for Rotate & Split (manual selection)
+                    const applyRotateSplit = selectedForSplit.has(imagePath);
                     
-                    if (needsRotation && enableSplitRotate) {
-                        // HORIZONTAL IMAGE that exceeds 480x800 (e.g., 2400 x 1600)
+                    if (applyRotateSplit) {
+                        // LIGHT NOVEL MODE: Rotate 90° CW and split if needed
                         //
                         // Step 1: Scale WIDTH to 800px (keep aspect ratio)
-                        //   scale = 800 / 2400 = 0.333
-                        //   Result: 800 x 533
-                        //
                         // Step 2: Rotate 90° clockwise  
-                        //   Result: 533 x 800
-                        //
-                        // Step 3: If WIDTH (533) > 480, split vertically with 15% overlap
-                        //   Each part: 480 x 800
+                        // Step 3: If WIDTH > 480, split vertically with 15% overlap
                         
                         // Step 1: Scale width to 800
                         const scale = MAX_HEIGHT / origW;  // 800 / origW
@@ -922,7 +1152,7 @@
                 
                 if (low.match(/\.(png|gif|webp|bmp|jpg|jpeg)$/)) {
                     const data = await fileObj.async('arraybuffer');
-                    const result = await processImage(data);
+                    const result = await processImage(data, path);
                     const { parts } = result;
                     
                     const baseName = path.replace(/\.[^.]+$/, '');
@@ -1017,8 +1247,9 @@
                 for (const [o, n] of Object.entries(renamed)) {
                     t = t.split(o.split('/').pop()).join(n.split('/').pop());
                 }
-                t = t.replace(/href="([^"]+\.jpg)"([^>]*)media-type="image\/(png|gif|webp|bmp)"/g, 'href="$1"$2media-type="image/jpeg"');
-                t = t.replace(/media-type="image\/(png|gif|webp|bmp)"([^>]*)href="([^"]+\.jpg)"/g, 'media-type="image/jpeg"$2href="$3"');
+                // Replace image media-types for converted files (handles any attribute order)
+                t = t.replace(/(<item\b[^>]*href="[^"]+\.jpg"[^>]*)media-type="image\/(png|gif|webp|bmp)"/g, '$1media-type="image/jpeg"');
+                t = t.replace(/(<item\b[^>]*)media-type="image\/(png|gif|webp|bmp)"([^>]*href="[^"]+\.jpg")/g, '$1media-type="image/jpeg"$3');
                 if (svgFix) t = t.replace(/\s+svg(?=["'\s>])/g, '');
                 
                 // Calculate OPF directory for relative paths
@@ -1120,7 +1351,7 @@
                 
                 const results = [];
                 log(`Batch conversion: <strong>${batchFiles.length} files</strong>`, '', 'INFO');
-                log(`Quality: ${jpegQuality}% | Light Novel: ${enableSplitRotate ? 'ON' : 'OFF'} | Grayscale: ${enableGrayscale ? 'ON' : 'OFF'}`, '', 'INFO');
+                log(`Quality: ${jpegQuality}% | Rotate & Split: ${selectedForSplit.size} images | Grayscale: ${enableGrayscale ? 'ON' : 'OFF'}`, '', 'INFO');
                 
                 let totalOriginalSize = 0;
                 let totalNewSize = 0;
@@ -1226,7 +1457,7 @@
         async function processSingleFile() {
             const zip = currentZip;
             log(`<strong>${currentFile.name}</strong> <span class="log-detail">(${formatBytes(currentFile.size)})</span>`, '', 'INFO'); 
-            log(`Quality: ${jpegQuality}% | Light Novel: ${enableSplitRotate ? 'ON' : 'OFF'} | Grayscale: ${enableGrayscale ? 'ON' : 'OFF'}`, '', 'INFO');
+            log(`Quality: ${jpegQuality}% | Rotate & Split: ${selectedForSplit.size} images | Grayscale: ${enableGrayscale ? 'ON' : 'OFF'}`, '', 'INFO');
             
             const renamed = {};
             zip.forEach(p => { const l = p.toLowerCase(); if (l.match(/\.(png|gif|webp|bmp|jpeg)$/)) renamed[p] = p.replace(/\.(png|gif|webp|bmp|jpeg)$/i, '.jpg'); });
@@ -1258,7 +1489,7 @@
                 
                 if (low.match(/\.(png|gif|webp|bmp|jpg|jpeg)$/)) {
                     const data = await file.async('arraybuffer');
-                    const result = await processImage(data);
+                    const result = await processImage(data, path);
                     const { parts, meta } = result;
                     const origFormat = path.split('.').pop().toUpperCase();
                     const fileName = path.split('/').pop();
@@ -1378,8 +1609,9 @@
                 for (const [o, n] of Object.entries(renamed)) {
                     t = t.split(o.split('/').pop()).join(n.split('/').pop());
                 }
-                t = t.replace(/href="([^"]+\.jpg)"([^>]*)media-type="image\/(png|gif|webp|bmp)"/g, 'href="$1"$2media-type="image/jpeg"');
-                t = t.replace(/media-type="image\/(png|gif|webp|bmp)"([^>]*)href="([^"]+\.jpg)"/g, 'media-type="image/jpeg"$2href="$3"');
+                // Replace image media-types for converted files (handles any attribute order)
+                t = t.replace(/(<item\b[^>]*href="[^"]+\.jpg"[^>]*)media-type="image\/(png|gif|webp|bmp)"/g, '$1media-type="image/jpeg"');
+                t = t.replace(/(<item\b[^>]*)media-type="image\/(png|gif|webp|bmp)"([^>]*href="[^"]+\.jpg")/g, '$1media-type="image/jpeg"$3');
                 if (svgFix) t = t.replace(/\s+svg(?=["'\s>])/g, '');
                 
                 // Calculate OPF directory for relative paths
@@ -1536,7 +1768,15 @@
             progressSection.classList.remove('visible'); 
             logSection.classList.remove('visible'); 
             completeSection.classList.remove('visible'); 
-            validationSection.classList.remove('visible'); 
+            validationSection.classList.remove('visible');
+            imagePicker.classList.remove('visible');
+            // Clean up image picker state
+            for (const meta of Object.values(imageMetadata)) {
+                if (meta.blobUrl) URL.revokeObjectURL(meta.blobUrl);
+            }
+            selectedForSplit.clear();
+            imageMetadata = {};
+            imageGrid.innerHTML = '';
             convertBtn.style.display = ''; 
             convertBtn.disabled = true; 
             downloadBtn.innerHTML = '<span>⬇️</span> Download EPUB';
