@@ -111,7 +111,10 @@
         .toggle-switch input:checked + .toggle-slider:before { transform: translateX(22px); background: var(--text-primary); }
         .log-section { margin-top: 24px; display: none; }
         .log-section.visible { display: block; }
-        .log-title { font-size: 0.85rem; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+        .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .log-title { font-size: 0.85rem; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.05em; }
+        .btn-export-log { background: var(--bg-tertiary); border: 1px solid var(--border); color: var(--text-secondary); padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; }
+        .btn-export-log:hover { background: var(--bg-secondary); color: var(--text-primary); border-color: var(--accent); }
         .log-container { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 16px; max-height: 300px; overflow-y: auto; font-size: 0.8rem; line-height: 1.8; font-family: 'SF Mono', 'Consolas', 'Monaco', monospace; }
         .log-entry { color: var(--text-secondary); display: flex; gap: 8px; align-items: flex-start; }
         .log-entry.success { color: var(--accent); }
@@ -326,7 +329,10 @@
         </div>
 
         <div class="log-section" id="log-section">
-            <div class="log-title">Conversion Log</div>
+            <div class="log-header">
+                <div class="log-title">Conversion Log</div>
+                <button class="btn-export-log" id="export-log-btn" title="Save log as text file">📥 Export</button>
+            </div>
             <div class="log-container" id="log-container"></div>
         </div>
 
@@ -369,6 +375,7 @@
         const convertBtn = $('convert-btn'), progressSection = $('progress-section');
         const progressBar = $('progress-bar'), progressStatus = $('progress-status'), progressPercent = $('progress-percent');
         const logSection = $('log-section'), logContainer = $('log-container');
+        const exportLogBtn = $('export-log-btn');
         const completeSection = $('complete-section'), downloadBtn = $('download-btn'), resetBtn = $('reset-btn');
         const statTotal = $('stat-total'), statConverted = $('stat-converted'), statSize = $('stat-size'), statSaved = $('stat-saved');
         const validationSection = $('validation-section'), validationIcon = $('validation-icon');
@@ -1877,6 +1884,53 @@
             
             progressSection.classList.remove('visible'); convertBtn.style.display = 'none'; qualitySection.style.display = 'none'; completeSection.classList.add('visible');
         }
+
+        // Export log as text file
+        exportLogBtn.onclick = () => {
+            // Extract text from log entries
+            const entries = logContainer.querySelectorAll('.log-entry');
+            let logText = `EPUB Baseline JPEG Converter - Conversion Log\n`;
+            logText += `Generated: ${new Date().toLocaleString()}\n`;
+            logText += `${'='.repeat(60)}\n\n`;
+            
+            entries.forEach(entry => {
+                const timestamp = entry.querySelector('.log-timestamp')?.textContent || '';
+                const tag = entry.querySelector('.log-tag')?.textContent || '';
+                const message = entry.querySelector('.log-message')?.textContent || entry.textContent;
+                
+                if (tag) {
+                    logText += `${timestamp} [${tag}] ${message}\n`;
+                } else {
+                    logText += `${timestamp} ${message}\n`;
+                }
+            });
+            
+            // Extract summary table if present
+            const summary = logContainer.querySelector('.log-summary');
+            if (summary) {
+                logText += `\n${'='.repeat(60)}\n`;
+                const title = summary.querySelector('.log-summary-title')?.textContent || 'Summary';
+                logText += `${title}\n`;
+                logText += `${'-'.repeat(40)}\n`;
+                
+                const rows = summary.querySelectorAll('tr');
+                rows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length >= 2) {
+                        logText += `${cells[0].textContent.padEnd(25)} ${cells[1].textContent}\n`;
+                    }
+                });
+            }
+            
+            // Download
+            const blob = new Blob([logText], { type: 'text/plain' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            const fileName = currentFile ? currentFile.name.replace('.epub', '_log.txt') : 'conversion_log.txt';
+            a.download = fileName;
+            a.click();
+            URL.revokeObjectURL(a.href);
+        };
 
         downloadBtn.onclick = () => { 
             if (!convertedBlob) return; 
