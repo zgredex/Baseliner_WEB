@@ -4,7 +4,7 @@ A browser-based tool for optimizing EPUB files for e-ink readers. Converts image
 
 **No installation required · Works 100% offline after loading**
 
-<img width="1512" height="949" alt="Zrzut ekranu 2026-02-27 o 16 43 17" src="https://github.com/user-attachments/assets/d9e9ba82-285a-46df-9af7-921a26b0f104" />
+<img width="810" height="955" alt="image" src="https://github.com/user-attachments/assets/e4f42dc1-decb-4f70-a7f6-cd053f8f5723" />
 
 ## Features
 
