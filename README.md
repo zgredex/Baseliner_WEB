@@ -213,7 +213,7 @@ Smart scaling to 480×800 is the biggest factor — large source images become d
 ## Dependencies
 
 - [JSZip 3.10.1](https://stuk.github.io/jszip/) - ZIP file handling
-- [Atkinson Hyperlegible Next](https://fonts.google.com/specimen/Atkinson+Hyperlegible) - UI font
+- [Noto Sans](https://fonts.google.com/noto/specimen/Noto+Sans) - UI font (with CJK, Arabic, Hebrew support)
 
 ## Changelog
 
